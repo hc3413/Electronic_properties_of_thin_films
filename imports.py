@@ -5,4 +5,9 @@ import os
 import datetime
 import pathlib
 from pathlib import Path
+import math
+import scipy
+from scipy.optimize import fsolve
+
+
 
