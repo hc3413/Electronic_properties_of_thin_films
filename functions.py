@@ -41,13 +41,12 @@ def import_ppms_data(path):
     return ppms_np, ppms_df
 
 
-def vdp_resistivity(data_np, film_thickness):
-    '''Calculates the resistivity of a thin film sample using the Van der Pauw method.
-    The measurments for this were done in index values of 2,3,4,5 
-    Each index value corresponds to a different configuration of the source and sense leads.
-    These 4 index configurations are split into 2 pairs of configurations, with each pair being able to generate the resistivity of the film.
-    Four configurations were used for robustness, to enable a comparison of the resistivity values obtained with the source/sense swapped.'''
-  
+def extract_ctf(data_np):
+    '''extract the number of temperature, field and current points used in the measurements
+    Also extract the rounded values of the temperature, field and current used in the measurements
+    These rounded values can be displayed to check they are as expected where the true more accurate values are used for the calculations
+    tf_av are the true, meausured average temperature and field values used for each set of current measurements'''
+    
     #### Step 1: Extract the rounded Current, Temperature, and Field values used from the data
     
     # Find the rounded values of current used and the number of unique current points
@@ -68,13 +67,12 @@ def vdp_resistivity(data_np, film_thickness):
     # Store the current, temperature and field data in an array to output from the funtion for later use
     ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
     
-    # Find the number of points used per index value for the measurements
-    points_per_index = temp_no*field_no
+    
     
     #### Step 2: Extract the true temperature and field values averaged over all the index values
 
     #initialize empty array to store the temp and field values averaged over each set of currents and each index value
-    tf_av = np.zeros((points_per_index,2,6))
+    tf_av = np.zeros((ctf[4]*ctf[5],2,6))
     
     # slice the data for each current point and sum them, dividing by the total number to get the field and temperature averaged over all the currents
     for i in range(current_no):
@@ -82,31 +80,47 @@ def vdp_resistivity(data_np, film_thickness):
     #sum over all the index values and divide by the number of indexes to get average temp and fields for each full set of electrical measurements (index 0-6)
     tf_av = np.sum(tf_av, axis=2)/np.shape(data_np)[2]
     
-    
-    ### Step 3: Loop over each temperature and field combination, calculating the sheet resistivity using the measurements over four index values
-    
+    return ctf, tf_av
+
+
+
+def vdp_equation(rho_sheet, R_A, R_B):
+    '''Solves the Van der Pauw equation for the sheet resistivity of a thin film sample.'''
+    return np.exp(-np.pi * R_A / rho_sheet) + np.exp(-np.pi * R_B / rho_sheet) - 1
+
+
+def vdp_resistivity(data_np, film_thickness,ctf,tf_av):
+    '''Calculates the resistivity of a thin film sample using the Van der Pauw method.
+    The measurments for this were done in index values of 2,3,4,5 
+    Each index value corresponds to a different configuration of the source and sense leads.
+    These 4 index configurations are split into 2 pairs of configurations, with each pair being able to generate the resistivity of the film independantly.
+    Four configurations were used for robustness, to enable a comparison of the resistivity values obtained with the source/sense positions swapped.'''
+  
     # Initialise a list to store the R^2 value for the IV data and check we have a good fit for the linear regression
     R_squared = []
     
-    # Initialize an empty np aray to store each temperature, field, and the resitivies for: config A, config B, average of A and B
-    vdp_data = np.zeros((points_per_index, 5))
+    # Find the number of measurement points at which the currents were measured (i.e each set of temperature and field values)
+    points_per_index = ctf[4]*ctf[5]
+    
+    # Initialize an empty np aray to store each temperature, field, and the resitivities for: config A, config B, average of A and B
+    res_data = np.zeros((points_per_index, 5))
 
-    # Calculate the sheet resistivity for each temperature and field combination using the Van der Pauw method
+    #Loop over each temperature and field combination, calculating the sheet resistivity using the Van der Pauw method
     for i in range(points_per_index):
         
         # Generate a variable to increment by the number of current points measured for each interation of the loop
         # thus going to the next measured set of currents each loop
-        increment = i*current_no
+        increment = i*ctf[3]
         
         ##### Using linear regression on the current-voltage data to obtain: 
-        ##### R_ij_kl[0] = the slope(resistance), R_ij_kl[1] = intercept, R_ij_kl[2] = R-squared value
-        
+        ### R_ij_kl[0] = the slope(resistance), R_ij_kl[1] = intercept, R_ij_kl[2] = R-squared value
+
         #First pair of Van der Pauw configurations
-        R_32_10 = linregress(data_np[increment:current_no+increment,2,2], data_np[increment:current_no+increment,4,2])    
-        R_20_31 = linregress(data_np[increment:current_no+increment,2,3], data_np[increment:current_no+increment,4,3])
+        R_32_10 = linregress(data_np[increment:ctf[3]+increment,2,2], data_np[increment:ctf[3]+increment,4,2])    
+        R_20_31 = linregress(data_np[increment:ctf[3]+increment,2,3], data_np[increment:ctf[3]+increment,4,3])
         #Second pair of Van der Pauw configurations
-        R_01_23 = linregress(data_np[increment:current_no+increment,2,4], data_np[increment:current_no+increment,4,4])
-        R_13_02 = linregress(data_np[increment:current_no+increment,2,5], data_np[increment:current_no+increment,4,5])
+        R_01_23 = linregress(data_np[increment:ctf[3]+increment,2,4], data_np[increment:ctf[3]+increment,4,4])
+        R_13_02 = linregress(data_np[increment:ctf[3]+increment,2,5], data_np[increment:ctf[3]+increment,4,5])
 
         # Append the R-squared value to the list
         R_squared.extend([R_32_10[2], R_20_31[2], R_01_23[2], R_13_02[2]])
@@ -126,16 +140,10 @@ def vdp_resistivity(data_np, film_thickness):
         R_sheet = (R_sheet_A + R_sheet_B) / 2
         
         # Step 3: Insert the new row to the np data array
-        vdp_data[i,:] = [tf_av[i,0], tf_av[i,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness]
-
- 
-            
-    df_vdp_data = pd.DataFrame(vdp_data, columns=['Temp', 'Field', 'rho_A', 'rho_B','rho_film'])
-
+        res_data[i,:] = [tf_av[i,0], tf_av[i,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness]
     
-    return vdp_data, df_vdp_data, ctf, R_squared
+    # Convert the numpy array to a pandas dataframe then return the data in both forms along with the R-squared values
+    df_res_data = pd.DataFrame(res_data, columns=['Temp', 'Field', 'rho_A', 'rho_B','rho_film'])
+    return res_data, df_res_data, R_squared
 
 
-# Function to solve Van der Pauw mathematical equation for the geometry of the sample
-def vdp_equation(rho_sheet, R_A, R_B):
-    return np.exp(-np.pi * R_A / rho_sheet) + np.exp(-np.pi * R_B / rho_sheet) - 1
