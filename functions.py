@@ -62,7 +62,7 @@ def extract_ctf(data_np):
     # Find the rounded values of field used and the number of unique field points
     # Can't use the np.unique for field as there are repeats of 0 field so it would miscount the field points used per loop
     field_no = int(data_np.shape[0]/temp_no/current_no)
-    field_unique = data_np[:field_no,1,0]
+    field_unique = data_np[0:current_no*field_no:current_no,1,0]
     
     # Store the current, temperature and field data in an array to output from the funtion for later use
     ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
@@ -145,5 +145,85 @@ def vdp_resistivity(data_np, film_thickness,ctf,tf_av):
     # Convert the numpy array to a pandas dataframe then return the data in both forms along with the R-squared values
     df_res_data = pd.DataFrame(res_data, columns=['Temp', 'Field', 'rho_A', 'rho_B','rho_film'])
     return res_data, df_res_data, R_squared
+
+
+
+def magnetoresistance(data_np, film_thickness,ctf,tf_av):
+    '''Calculates the magnetoresistance of a thin film sample using the Van der Pauw method.
+    Outputs the magnetoresistance values for each temperature and field strength.
+    Third index stores the magnetoresistance value for rho_A, rho_B, and the average of the two: rho_film to look at any ayssmetries with direction'''
+    # Calculate the resistivity of the thin film sample using the Van der Pauw method
+    [res_data, _, _] = vdp_resistivity(data_np, film_thickness, ctf, tf_av)
+    
+    # Initialize an empty array to store the magnetoresistance data at each temperature (rows) and field strength (columns)
+    # The third index stores the magnetoresistance value for rho_A, rho_B, and the average of the two: rho_film to look at any ayssmetries with direction
+    mag_res = np.zeros((ctf[4], ctf[5],3))
+    
+    # Loop over the temperature and field data extracting the magnetoresistance values
+    for t_count, t in enumerate(ctf[1]):
+        for f_count, f in enumerate(ctf[2]):
+            # Magnetoresistance = 100*(R(H) - R(0)) / R(0)
+            mag_res[t_count,f_count,:] = 100*(res_data[int(t_count*ctf[5]+f_count),2:5]-res_data[int(t_count*ctf[5]),2:5])/res_data[int(t_count*ctf[5]),2:5]
+            #print(f'For T={t} K and B={f} Oe, magnetoresistance = {mag_res[t_count,f_count]} %')
+        
+    return mag_res
+
+
+
+def vdp_hall(data_np, film_thickness,ctf,tf_av):
+    '''Calculates '''
+    #ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
+    
+    
+    # Initialise a list to store the R^2 value for the IV data and check we have a good fit for the linear regression
+    R_squared = []
+    
+    # Find the number of measurement points at which the currents were measured (i.e each set of temperature and field values)
+    points_per_index = ctf[4]*ctf[5]
+    
+    # Initialize an empty np aray to store each temperature, field, and the resitivities for: config A, config B, average of A and B
+    hall_data = np.zeros((points_per_index, 5))
+
+    #Loop over each temperature and field combination, calculating the sheet resistivity using the Van der Pauw method
+    for i in range(points_per_index):
+        
+        # Generate a variable to increment by the number of current points measured for each interation of the loop
+        # thus going to the next measured set of currents each loop
+        increment = i*ctf[3]
+        
+        ##### Using linear regression on the current-voltage data to obtain: 
+        ### R_ij_kl[0] = the slope(resistance), R_ij_kl[1] = intercept, R_ij_kl[2] = R-squared value
+
+        #First pair of Van der Pauw configurations
+        R_32_10 = linregress(data_np[increment:ctf[3]+increment,2,2], data_np[increment:ctf[3]+increment,4,2])    
+        R_20_31 = linregress(data_np[increment:ctf[3]+increment,2,3], data_np[increment:ctf[3]+increment,4,3])
+        #Second pair of Van der Pauw configurations
+        R_01_23 = linregress(data_np[increment:ctf[3]+increment,2,4], data_np[increment:ctf[3]+increment,4,4])
+        R_13_02 = linregress(data_np[increment:ctf[3]+increment,2,5], data_np[increment:ctf[3]+increment,4,5])
+
+        # Append the R-squared value to the list
+        R_squared.extend([R_32_10[2], R_20_31[2], R_01_23[2], R_13_02[2]])
+
+        ##### Solve the Van der Pauw equation for both pairs of configurations
+
+        # Initial guess for rho_sheet
+        initial_guess = 1.0
+
+        # Solve for rho_sheet for the first pair (R_A)
+        R_sheet_A = fsolve(vdp_equation, initial_guess, args=(R_32_10[0], R_20_31[0]))[0]
+
+        # Solve for rho_sheet for the second pair (R_B)
+        R_sheet_B = fsolve(vdp_equation, initial_guess, args=(R_01_23[0], R_13_02[0]))[0]
+
+        # Average the two solutions for the final sheet resistivity
+        R_sheet = (R_sheet_A + R_sheet_B) / 2
+        
+        # Step 3: Insert the new row to the np data array
+        res_data[i,:] = [tf_av[i,0], tf_av[i,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness]
+    
+    # Convert the numpy array to a pandas dataframe then return the data in both forms along with the R-squared values
+    df_res_data = pd.DataFrame(res_data, columns=['Temp', 'Field', 'rho_A', 'rho_B','rho_film'])
+    return res_data, df_res_data, R_squared
+
 
 
