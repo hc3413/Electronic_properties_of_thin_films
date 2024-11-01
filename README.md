@@ -3,6 +3,11 @@ Hall and resitivity measurments to determine the mobility and carrier density in
 In the main part for Van der Pauw geometry measurments on the PPMS.
 Extracts data, combines measurements to remove offsets and plots results giving resistivity and mobility of materials. 
 
+- The program is run in "Analysis" juptyer script with the main functions stored and run from functions.py 
+- In general for every np data array created (e.g. "data_np") there is a corresponding dataframe: "data_np_df" so the data can be quickly visualised and checked (if the np data is 3d, then only one of the index is chosen for the df)
+
+
+
 
 Make sure you have activated the virtual environement EPOTFvenv which contains all the required packages to run the code
 

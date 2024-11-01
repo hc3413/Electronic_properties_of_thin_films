@@ -5,6 +5,7 @@ from import_dep import *
 def import_ppms_data(path):
     '''
     This function imports the data from the PPMS instrument.
+    Note that it converts the field from Oe to Tesla. (strictlys speaking from H to B)
     '''
     # Import the data
     # Import the file, treating lines with non-numeric data as comments
@@ -14,10 +15,10 @@ def import_ppms_data(path):
     ppms_df.drop(ppms_df.columns[[6, 7]], axis=1, inplace=True)
 
     # Assign headers to columns
-    ppms_df.columns = ['Temp', 'Field', 'Source (A)', 'Source (V)', 'Sense (V)', 'index']
+    ppms_df.columns = ['Temp (K)', 'Field', 'Source (A)', 'Source (V)', 'Sense (V)', 'index']
 
     # Convert columns to the appropriate data types
-    ppms_df['Temp'] = pd.to_numeric(ppms_df['Temp'], errors='coerce')
+    ppms_df['Temp (K)'] = pd.to_numeric(ppms_df['Temp (K)'], errors='coerce')
     ppms_df['Field'] = pd.to_numeric(ppms_df['Field'], errors='coerce')
     ppms_df['Source (A)'] = pd.to_numeric(ppms_df['Source (A)'], errors='coerce')
     ppms_df['Source (V)'] = pd.to_numeric(ppms_df['Source (V)'], errors='coerce')
@@ -29,6 +30,12 @@ def import_ppms_data(path):
 
     # Convert the 'index' column to integer format
     ppms_df['index'] = ppms_df['index'].astype(int)
+    
+    # Convert the field from Oe to Tesla
+    ppms_df['Field'] = ppms_df['Field'] / 10000
+
+    # Change the header to 'Field (T)'
+    ppms_df.rename(columns={'Field': 'Field (T)'}, inplace=True)
 
     # Convert the data frame to a numpy array
     ndnp = ppms_df.to_numpy()
@@ -41,7 +48,7 @@ def import_ppms_data(path):
     return ppms_np, ppms_df
 
 
-def extract_ctf(data_np):
+def extract_ctf(data_import_np, reorder = False):
     '''extract the number of temperature, field and current points used in the measurements
     Also extract the rounded values of the temperature, field and current used in the measurements
     These rounded values can be displayed to check they are as expected where the true more accurate values are used for the calculations
@@ -50,37 +57,59 @@ def extract_ctf(data_np):
     #### Step 1: Extract the rounded Current, Temperature, and Field values used from the data
     
     # Find the rounded values of current used and the number of unique current points
-    current_round = np.round(data_np[:,2,0],decimals=7)
+    current_round = np.round(data_import_np[:,2,0],decimals=7)
     current_unique = np.unique(current_round)
     current_no = current_unique.shape[0]
     
     # Find the rounded values of temperature used and the number of unique temperature points
-    temp_round = np.round(data_np[:,0,0],decimals=0)
+    temp_round = np.round(data_import_np[:,0,0],decimals=0)
     temp_unique = np.unique(temp_round)
     temp_no = temp_unique.shape[0]
     
     # Find the rounded values of field used and the number of unique field points
     # Can't use the np.unique for field as there are repeats of 0 field so it would miscount the field points used per loop
-    field_no = int(data_np.shape[0]/temp_no/current_no)
-    field_unique = data_np[0:current_no*field_no:current_no,1,0]
+    field_no = int(data_import_np.shape[0]/temp_no/current_no)
+    field_unique = data_import_np[0:current_no*field_no:current_no,1,0]
+    
+    # If reorder is true, reorder the field values so they are in ascending order from -H max to H max 
+    if reorder == True:
+        field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[:int(field_no/2)]))
     
     # Store the current, temperature and field data in an array to output from the funtion for later use
     ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
     
     
+    ### Step 2: Re-order the main data  aray so that the H fields go in ascending order (data was taken e.g. H = 0, 2, 4, -4, -2, 0 -> -4,-2, 0, 0, 2, 4, 0)
     
-    #### Step 2: Extract the true temperature and field values averaged over all the index values
+    if reorder == True:
+        # Initialise empty array same shape as data_import_np to store the reordered data
+        data_np_reorder = np.zeros_like(data_import_np)
+        print(data_np_reorder.shape)
+        for T in range(ctf[4]):
+            h_1 = int(T*ctf[3]*ctf[5])
+            h_2 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]/2)
+            h_3 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5])
+            data_np_reorder[h_1:h_1+ctf[3]*ctf[5],:] = np.concatenate((data_import_np[h_2:h_3,:],data_import_np[h_1:h_2,:]), axis = 0)
+        
+        data_out = data_np_reorder
+    # If reorder is false, return the data as it was imported    
+    else: 
+        data_out = data_import_np
+        
+    #### Step 3: Extract the true temperature and field values averaged over all the index values
 
     #initialize empty array to store the temp and field values averaged over each set of currents and each index value
     tf_av = np.zeros((ctf[4]*ctf[5],2,6))
     
     # slice the data for each current point and sum them, dividing by the total number to get the field and temperature averaged over all the currents
     for i in range(current_no):
-                tf_av += data_np[i::current_no,:2,:]/current_no
+                tf_av += data_out[i::current_no,:2,:]/current_no
     #sum over all the index values and divide by the number of indexes to get average temp and fields for each full set of electrical measurements (index 0-6)
-    tf_av = np.sum(tf_av, axis=2)/np.shape(data_np)[2]
-    
-    return ctf, tf_av
+    tf_av = np.sum(tf_av, axis=2)/np.shape(data_out)[2]
+
+    #### Step 4: Convert the numpy array to a pandas dataframe for checking values are correct and return the data
+    data_out_df = pd.DataFrame(data_out[:,:,2], columns=['Temp (K)', 'Field (T)', 'Source (A)', 'Source (V)', 'Sense (V)'])
+    return ctf, tf_av, data_out, data_out_df
 
 
 
@@ -143,8 +172,8 @@ def vdp_resistivity(data_np, film_thickness,ctf,tf_av):
         res_data[i,:] = [tf_av[i,0], tf_av[i,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness]
     
     # Convert the numpy array to a pandas dataframe then return the data in both forms along with the R-squared values
-    df_res_data = pd.DataFrame(res_data, columns=['Temp', 'Field', 'rho_xx_A', 'rho_xx_B','rho_xx_average'])
-    return res_data, df_res_data, R_squared
+    res_data_df = pd.DataFrame(res_data, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)'])
+    return res_data, res_data_df, R_squared
 
 
 
@@ -163,7 +192,7 @@ def magnetoresistance(data_np, film_thickness,ctf,tf_av):
     for t_count, t in enumerate(ctf[1], start=0):
         for f_count, f in enumerate(ctf[2], start=0):
             # Magnetoresistance = 100*(R(H) - R(0)) / R(0)
-            mag_res[t_count,f_count,:] = 100*(res_data[int(t_count*ctf[5]+f_count),2:5]-res_data[int(t_count*ctf[5]),2:5])/res_data[int(t_count*ctf[5]),2:5]
+            mag_res[t_count,f_count,:] = 100*(res_data[int(t_count*ctf[5]+f_count),2:5]-res_data[int(t_count*ctf[5]+ctf[5]/2),2:5])/res_data[int(t_count*ctf[5]+ctf[5]/2),2:5]
             #print(f'For T={t} K and B={f} Oe, magnetoresistance = {mag_res[t_count,f_count]} %')
         
     return mag_res
@@ -182,7 +211,7 @@ def vdp_hall(data_np, film_thickness,ctf,tf_av):
     hall_data = np.zeros((ctf[4]*ctf[5], 7))
     
     # Initialize an empty np array to store the Temperature, Hall coefficient A, R^2 A, Hall Coefficient B, and average Hall coefficients
-    hall_coefficient = np.zeros((ctf[4], 7))
+    hall_coefficient = np.zeros((ctf[4], 6))
 
     #Loop over each temperature using regression on the hall_resistivity-field  data to obtain the Hall coefficient at each temperature
     for T in range(ctf[4]):
@@ -214,17 +243,19 @@ def vdp_hall(data_np, film_thickness,ctf,tf_av):
         #Regression on (x,y) = (H_applied, V_measured)
         HC_13_42 = linregress(hall_data[T*ctf[5]:(T+1)*ctf[5],1], hall_data[T*ctf[5]:(T+1)*ctf[5],2])    
         #Hall Coefficient in configuration B (with source and sense leads swapped)
-        HC_24_31 = linregress(hall_data[T*ctf[5]:(T+1)*ctf[5],1], hall_data[T*ctf[5]:(T+1)*ctf[5],3])
+        HC_24_31 = linregress(hall_data[T*ctf[5]:(T+1)*ctf[5],1], hall_data[T*ctf[5]:(T+1)*ctf[5],4])
         
-        hall_coefficient[T,:] = [tf_av[i,0], HC_13_42[0],HC_13_42[2], HC_24_31[0], HC_13_42[2], (HC_13_42[0]+HC_24_31[0])/2, HC_13_42[2]]
+        hall_coefficient[T,:] = [tf_av[i,0], HC_13_42[0], HC_13_42[2], HC_24_31[0],HC_24_31[2], (HC_13_42[0]+HC_24_31[0])/2]
         
-    # Convert the numpy array to a pandas dataframe
-    df_hall_coefficient = pd.DataFrame(hall_coefficient, columns=['Temp', 'Field', 'Hallco_A', 'R_squared(H)_A', 'Hallco_B','R_squared(H)_B', 'Hallco_average'])
-    # Convert the numpy array to a pandas dataframe 
-    df_hall_data = pd.DataFrame(hall_data, columns=['Temp', 'Field', 'rho_xy_A', 'R_squared(I)_A', 'rho_xy_B','R_squared(I)_B', 'rho_xy_average'])
+    
+    # Convert the numpy array to a pandas dataframe for the Hall resistivity
+    hall_data_df = pd.DataFrame(hall_data, columns=['Temp (K)', 'Field (T)', 'rho_xy_A(ohm.m)', 'R_squared(I)_A', 'rho_xy_B(ohm.m)','R_squared(I)_B', 'rho_xy_average(ohm.m)'])
+    
+    # Convert the numpy array to a pandas dataframe for the Hall coefficeint
+    hall_coefficient_df = pd.DataFrame(hall_coefficient, columns=['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average'])
     
     #Return the data in both forms along with the R-squared values
-    return hall_data, df_hall_data, hall_coefficient, df_hall_coefficient
+    return hall_data, hall_data_df, hall_coefficient, hall_coefficient_df
 
 
 
