@@ -47,8 +47,14 @@ def import_ppms_data(path):
     ppms_np = ppms_np.transpose(1,2,0)
     return ppms_np, ppms_df
 
+def round_to_sf(x, p):
+    '''Rounds a number to a specified number of significant figures'''
+    x = np.asarray(x)
+    x_positive = np.where(np.isfinite(x) & (x != 0), np.abs(x), 10**(p-1))
+    mags = 10 ** (p - 1 - np.floor(np.log10(x_positive)))
+    return np.round(x * mags) / mags
 
-def extract_ctf(data_import_np, reorder = False):
+def extract_ctf(data_import_np, reorder = False,  Reduced_data = False):
     '''extract the number of temperature, field and current points used in the measurements
     Also extract the rounded values of the temperature, field and current used in the measurements
     These rounded values can be displayed to check they are as expected where the true more accurate values are used for the calculations
@@ -57,9 +63,10 @@ def extract_ctf(data_import_np, reorder = False):
     #### Step 1: Extract the rounded Current, Temperature, and Field values used from the data
     
     # Find the rounded values of current used and the number of unique current points
-    current_round = np.round(data_import_np[:,2,0],decimals=7)
-    current_unique = np.unique(current_round)
-    current_no = current_unique.shape[0]
+    current_round = round_to_sf(data_import_np[:,2,0],1) #round to 1 significant figure
+    current_unique = np.unique(current_round) #find the unique values
+    current_unique[(current_unique > -1e-13) & (current_unique < 1e-13)] = 0 #handles the case where the current is 0 but gives a non-zero value
+    current_no = current_unique.shape[0] #find the number of unique values
     
     # Find the rounded values of temperature used and the number of unique temperature points
     temp_round = np.round(data_import_np[:,0,0],decimals=0)
@@ -71,11 +78,19 @@ def extract_ctf(data_import_np, reorder = False):
     field_no = int(data_import_np.shape[0]/temp_no/current_no)
     field_unique = data_import_np[0:current_no*field_no:current_no,1,0]
     
+    if Reduced_data != False:
+        data_import_np = data_import_np[Reduced_data[0]*current_no*field_no:Reduced_data[1]*current_no*field_no,:,:]
+        
+         # Find the rounded values of temperature used and the number of unique temperature points
+        temp_round = np.round(data_import_np[:,0,0],decimals=0)
+        temp_unique = np.unique(temp_round)
+        temp_no = temp_unique.shape[0]
+    
     # If reorder is true, reorder the field values so they are in ascending order from -H max to H max 
     if reorder == True:
         field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[:int(field_no/2)]))
     
-    # Store the current, temperature and field data in an array to output from the funtion for later use
+    # Store the current, temperature and field data in an array to output from the function for later use
     ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
     
     
@@ -84,7 +99,6 @@ def extract_ctf(data_import_np, reorder = False):
     if reorder == True:
         # Initialise empty array same shape as data_import_np to store the reordered data
         data_np_reorder = np.zeros_like(data_import_np)
-        print(data_np_reorder.shape)
         for T in range(ctf[4]):
             h_1 = int(T*ctf[3]*ctf[5])
             h_2 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]/2)
@@ -108,10 +122,11 @@ def extract_ctf(data_import_np, reorder = False):
     tf_av = np.sum(tf_av, axis=2)/np.shape(data_out)[2]
 
     #### Step 4: Convert the numpy array to a pandas dataframe for checking values are correct and return the data
-    data_out_df = pd.DataFrame(data_out[:,:,2], columns=['Temp (K)', 'Field (T)', 'Source (A)', 'Source (V)', 'Sense (V)'])
+    data_out_df = pd.DataFrame(data_out[:,:,2], columns=['Temp (K)', 'Field (T)', 'Source (A)', 'Source (V)', 'Sense (V)'])    
+
     return ctf, tf_av, data_out, data_out_df
 
-
+    
 
 def vdp_equation(rho_sheet, R_A, R_B):
     '''Solves the Van der Pauw equation for the sheet resistivity of a thin film sample.'''
