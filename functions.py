@@ -54,23 +54,53 @@ def round_to_sf(x, p):
     mags = 10 ** (p - 1 - np.floor(np.log10(x_positive)))
     return np.round(x * mags) / mags
 
-def extract_ctf(data_import_np, reorder = False,  Reduced_data = False):
+def extract_ctf(data_import_np, reorder = False,  Reduced_temp = False, Reduced_current = False):
     '''extract the number of temperature, field and current points used in the measurements
     Also extract the rounded values of the temperature, field and current used in the measurements
     These rounded values can be displayed to check they are as expected where the true more accurate values are used for the calculations
-    tf_av are the true, meausured average temperature and field values used for each set of current measurements'''
+    tf_av are the true, meausured average temperature and field values used for each set of current measurements
+    Reduced_temp = [3,-1] will skip the first 3 temperature points and the last 1 temperature point
+    Reduced_current = 2 will skip the first 2 current points and the last 2 current points'''
     
     #### Step 1: Extract the rounded Current, Temperature, and Field values used from the data
     
     # Find the rounded values of current used and the number of unique current points
-    current_round = round_to_sf(data_import_np[:,2,0],1) #round to 1 significant figure
+    current_round = round_to_sf(data_import_np[:,2,0],2) #round to 2 significant figures
     current_unique = np.unique(current_round) #find the unique values
     current_unique[(current_unique > -1e-13) & (current_unique < 1e-13)] = 0 #handles the case where the current is 0 but gives a non-zero value
     current_no = current_unique.shape[0] #find the number of unique values
     
+    # Removing current values that are not wanted to "threshold" the current data
+    if Reduced_current != False:
+        new_current_no = current_no - 2*Reduced_current
+    # Initialize an empty np array to store the sliced data
+        data_sliced_np = np.zeros([int(data_import_np.shape[0]*(new_current_no/current_no)),data_import_np.shape[1],data_import_np.shape[2]])
+        
+        # Clip the starting and ending current values by the index of Reduced_current
+        for i in range(Reduced_current, current_no - Reduced_current):
+            #Slice the data for each current point and store in correct position in new array (now jumping by new_current_no compared to current_no)
+            data_sliced_np[i-Reduced_current::new_current_no,:,:] = data_import_np[i::current_no, :, :] 
+
+        # Update data_import_np with the sliced data
+        data_import_np = data_sliced_np
+        
+        # Update the current variables
+        current_no = current_no - 2*Reduced_current
+        current_unique = current_unique[Reduced_current:- Reduced_current]
+        
+        
+    
     # Find the rounded values of temperature used and the number of unique temperature points
     temp_round = np.round(data_import_np[:,0,0],decimals=0)
-    temp_unique = np.unique(temp_round)
+    temp_unique, temp_unique_counts = np.unique(temp_round, return_counts = True)
+
+    # Checking for Erronous temperares that are slightly off from the SET value but are not new temperature setponts
+    # Set threshold of 80% of the mean temperature frequency, any temperatures appearing below this frequency are considered an error   
+    if temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8].shape[0] >= 1:
+        print('tempshape',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8].shape[0])
+        print('WARNING Potential Temperature Issues: The erronous temperature points are:',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8])
+        # Remove the erronous temperature points that don't appear frequently enough thus are probably from temperature fluctuations
+        temp_unique = temp_unique[temp_unique_counts >= np.mean(temp_unique_counts)*0.8]
     temp_no = temp_unique.shape[0]
     
     # Find the rounded values of field used and the number of unique field points
@@ -78,8 +108,8 @@ def extract_ctf(data_import_np, reorder = False,  Reduced_data = False):
     field_no = int(data_import_np.shape[0]/temp_no/current_no)
     field_unique = data_import_np[0:current_no*field_no:current_no,1,0]
     
-    if Reduced_data != False:
-        data_import_np = data_import_np[Reduced_data[0]*current_no*field_no:Reduced_data[1]*current_no*field_no,:,:]
+    if Reduced_temp != False:
+        data_import_np = data_import_np[Reduced_temp[0]*current_no*field_no:Reduced_temp[1]*current_no*field_no,:,:]
         
          # Find the rounded values of temperature used and the number of unique temperature points
         temp_round = np.round(data_import_np[:,0,0],decimals=0)
@@ -93,7 +123,10 @@ def extract_ctf(data_import_np, reorder = False,  Reduced_data = False):
     # Store the current, temperature and field data in an array to output from the function for later use
     ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
     
-    
+    print(ctf[3],'Currents (uA):',ctf[0]/1e-6)  
+    print(ctf[4],'Temperatures (K):',ctf[1])
+    print(ctf[5],'Fields (kOe):',np.round(ctf[2]*10,decimals=0))
+    print('Is this correct?')
     ### Step 2: Re-order the main data  aray so that the H fields go in ascending order (data was taken e.g. H = 0, 2, 4, -4, -2, 0 -> -4,-2, 0, 0, 2, 4, 0)
     
     if reorder == True:

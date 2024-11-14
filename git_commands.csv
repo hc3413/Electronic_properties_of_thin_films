@@ -38,3 +38,9 @@ git remote prune origin %update branches etc from online repository
 Clone directory
 Change the current working directory to the location where you want the cloned directory.
 Type git clone, and then paste the URL you copied earlier.
+
+
+Virtual environment
+#source EPOTFenv/bin/activate (launching and exiting the virtual environment containing the required modules, stored in the working directory for VNA_Analysis)
+#EPOTFenv/bin/python your_script.py - for running a script in the virtual environment
+#source deactivate
