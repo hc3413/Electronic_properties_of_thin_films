@@ -54,13 +54,14 @@ def round_to_sf(x, p):
     mags = 10 ** (p - 1 - np.floor(np.log10(x_positive)))
     return np.round(x * mags) / mags
 
-def extract_ctf(data_import_np, reorder = False,  Reduced_temp = False, Reduced_current = False):
+def extract_ctf(data_import_np, reorder = True,  Reduced_temp = False, Reduced_current = False):
     '''extract the number of temperature, field and current points used in the measurements
     Also extract the rounded values of the temperature, field and current used in the measurements
     These rounded values can be displayed to check they are as expected where the true more accurate values are used for the calculations
     tf_av are the true, meausured average temperature and field values used for each set of current measurements
     Reduced_temp = [3,-1] will skip the first 3 temperature points and the last 1 temperature point
-    Reduced_current = 2 will skip the first 2 current points and the last 2 current points'''
+    Reduced_current = 2 will skip the first 2 current points and the last 2 current points
+    Re-order (on by default) rearranges the field values so they are in ascending order from -H max to H max'''
     
     #### Step 1: Extract the rounded Current, Temperature, and Field values used from the data
     
