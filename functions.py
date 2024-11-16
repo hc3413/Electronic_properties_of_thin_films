@@ -1,51 +1,100 @@
 #import all the libraries needed
 from import_dep import *
 
+# Define a class to store the VNA data alongside its ascociated with the filename, device index, state and DC resistance
+@dataclass
+class PPMSData:
+    data_import_np: np.ndarray = None #raw data from the PPMS instrument
+    data_import_df: pd.DataFrame = None #data from the PPMS instrument in a pandas dataframe
+    
+    data_np: np.ndarray = None #PPMS data sliced and reordered for analysis
+    data_df: pd.DataFrame = None #PPMS data sliced and reordered for analysis in a pandas dataframe
+    
+    ctf: list = None # Storing extract values from data [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
+    
+    tf_av: np.ndarray = None #average temperature and field values as measured during each set of current measurements
+    
+    res_data: np.ndarray = None #resistivity data calculated using the Van der Pauw method: columns = ['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)']
+    res_data_df: pd.DataFrame = None #resistivity data calculated using the Van der Pauw method in a pandas dataframe
+    R_squared_res: list = None #R-squared values for the linear regression of the IV data
+    
+    mag_res: np.ndarray = None #magnetoresistance data calculated for each temperature and field strength
+    
+    hall_data: np.ndarray = None #Hall resistivity data calculated for each temperature and field strength: columns = ['Temp (K)', 'Field (T)', 'rho_xy_A(ohm.m)', 'R_squared(I)_A', 'rho_xy_B(ohm.m)','R_squared(I)_B', 'rho_xy_average(ohm.m)']
+    hall_data_df: pd.DataFrame = None #Hall resistivity data calculated for each temperature and field strength in a pandas dataframe
+    hall_coefficient: np.ndarray = None #Hall coefficient data calculated for each temperature: columns = ['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average']
+    hall_coefficient_df: pd.DataFrame = None #Hall coefficient data calculated for each temperature in a pandas dataframe
+    
+    filename: str = None #filename of the data
+    film_thickness: float = None  #thickness of the film in meters - set to 1 as default, if set to 1 then you are calculating sheet resistance not resistivity
+    material: str = None #material of the film
+    plot_str: str = None #strings to be used at the start of the figure file name, including the sample code
+    
 
-def import_ppms_data(path):
+
+def import_ppms_data(path, film_thickness = 1.0, material = 'NA', plot_str = 'NA'):
     '''
     This function imports the data from the PPMS instrument.
     Note that it converts the field from Oe to Tesla. (strictlys speaking from H to B)
     '''
-    # Import the data
-    # Import the file, treating lines with non-numeric data as comments
-    ppms_df = pd.read_csv(path, sep='\t', skiprows=6, header=None, comment='N')
+    PPMS_files = []
+    # Get a list of all the files in the directory
+    files = [Path(f) for f in os.listdir(path)]
+    # Loop over all files in the directory extracting the data as a df, converting it to a numpy array, and slicing it to separete index values into a third dimension
+    for count, fi in enumerate(files):  
+                    
+        # Import the file, treating lines with non-numeric data as comments
+        try:
+            ppms_df = pd.read_csv(path.joinpath(fi), sep='\t', skiprows=6, header=None, comment='N')
+        except Exception as e:
+            print(f"Error with file: {fi}, {e}")
+            continue
 
-    # Drop unwanted columns
-    ppms_df.drop(ppms_df.columns[[6, 7]], axis=1, inplace=True)
+        # Drop unwanted columns
+        try:
+            ppms_df.drop(ppms_df.columns[[6, 7]], axis=1, inplace=True)
+        except Exception as e:
+            print(f"Error with file: {fi}, {e}")
+            continue
 
-    # Assign headers to columns
-    ppms_df.columns = ['Temp (K)', 'Field', 'Source (A)', 'Source (V)', 'Sense (V)', 'index']
+        # Assign headers to columns
+        ppms_df.columns = ['Temp (K)', 'Field', 'Source (A)', 'Source (V)', 'Sense (V)', 'index']
 
-    # Convert columns to the appropriate data types
-    ppms_df['Temp (K)'] = pd.to_numeric(ppms_df['Temp (K)'], errors='coerce')
-    ppms_df['Field'] = pd.to_numeric(ppms_df['Field'], errors='coerce')
-    ppms_df['Source (A)'] = pd.to_numeric(ppms_df['Source (A)'], errors='coerce')
-    ppms_df['Source (V)'] = pd.to_numeric(ppms_df['Source (V)'], errors='coerce')
-    ppms_df['Sense (V)'] = pd.to_numeric(ppms_df['Sense (V)'], errors='coerce')
-    ppms_df['index'] = pd.to_numeric(ppms_df['index'], downcast='integer', errors='coerce')
+        # Convert columns to the appropriate data types
+        ppms_df['Temp (K)'] = pd.to_numeric(ppms_df['Temp (K)'], errors='coerce')
+        ppms_df['Field'] = pd.to_numeric(ppms_df['Field'], errors='coerce')
+        ppms_df['Source (A)'] = pd.to_numeric(ppms_df['Source (A)'], errors='coerce')
+        ppms_df['Source (V)'] = pd.to_numeric(ppms_df['Source (V)'], errors='coerce')
+        ppms_df['Sense (V)'] = pd.to_numeric(ppms_df['Sense (V)'], errors='coerce')
+        ppms_df['index'] = pd.to_numeric(ppms_df['index'], downcast='integer', errors='coerce')
 
-    # Drop rows where all values are NaN (e.g., empty lines)
-    ppms_df.dropna(how='all', inplace=True)
+        # Drop rows where all values are NaN (e.g., empty lines)
+        ppms_df.dropna(how='all', inplace=True)
 
-    # Convert the 'index' column to integer format
-    ppms_df['index'] = ppms_df['index'].astype(int)
-    
-    # Convert the field from Oe to Tesla
-    ppms_df['Field'] = ppms_df['Field'] / 10000
+        # Convert the 'index' column to integer format
+        ppms_df['index'] = ppms_df['index'].astype(int)
+        
+        # Convert the field from Oe to Tesla
+        ppms_df['Field'] = ppms_df['Field'] / 10000
 
-    # Change the header to 'Field (T)'
-    ppms_df.rename(columns={'Field': 'Field (T)'}, inplace=True)
+        # Change the header to 'Field (T)'
+        ppms_df.rename(columns={'Field': 'Field (T)'}, inplace=True)
 
-    # Convert the data frame to a numpy array
-    ndnp = ppms_df.to_numpy()
+        # Convert the data frame to a numpy array
+        ndnp = ppms_df.to_numpy()
 
-    # Slice the array taking every 6th value (i.e the different index values) 
-    # then stack these 2d arrays to generate a 3d array
-    # The new array has (rows, columns, index) dimensions
-    ppms_np = np.array([ndnp[q::6,:-1] for q in range(6)])
-    ppms_np = ppms_np.transpose(1,2,0)
-    return ppms_np, ppms_df
+        # Slice the array taking every 6th value (i.e the different index values) 
+        # then stack these 2d arrays to generate a 3d array
+        # The new array has (rows, columns, index) dimensions
+        ppms_np = np.array([ndnp[q::6,:-1] for q in range(6)])
+        ppms_np = ppms_np.transpose(1,2,0)   
+        
+        # Store the extracted data into a list of PPMSData objects
+        PPMS_files.append(PPMSData(data_import_np = ppms_np, data_import_df = ppms_df, filename = fi, film_thickness = film_thickness, material = material, plot_str = plot_str))
+        
+        # Print the filenames of the imported data to check they are correct along with the shape of the numpy array
+        print(f'File {count+1} imported: {fi} with shape {ppms_np.shape}')
+    return PPMS_files
 
 def round_to_sf(x, p):
     '''Rounds a number to a specified number of significant figures'''
@@ -54,7 +103,7 @@ def round_to_sf(x, p):
     mags = 10 ** (p - 1 - np.floor(np.log10(x_positive)))
     return np.round(x * mags) / mags
 
-def extract_ctf(data_import_np, reorder = True,  Reduced_temp = False, Reduced_current = False):
+def extract_ctf(PPMS_files, reorder = True,  Reduced_temp = False, Reduced_current = False):
     '''extract the number of temperature, field and current points used in the measurements
     Also extract the rounded values of the temperature, field and current used in the measurements
     These rounded values can be displayed to check they are as expected where the true more accurate values are used for the calculations
@@ -63,102 +112,110 @@ def extract_ctf(data_import_np, reorder = True,  Reduced_temp = False, Reduced_c
     Reduced_current = 2 will skip the first 2 current points and the last 2 current points
     Re-order (on by default) rearranges the field values so they are in ascending order from -H max to H max'''
     
-    #### Step 1: Extract the rounded Current, Temperature, and Field values used from the data
+    for ppms in PPMS_files:
+        data_import_np = ppms.data_import_np
     
-    # Find the rounded values of current used and the number of unique current points
-    current_round = round_to_sf(data_import_np[:,2,0],2) #round to 2 significant figures
-    current_unique = np.unique(current_round) #find the unique values
-    current_unique[(current_unique > -1e-13) & (current_unique < 1e-13)] = 0 #handles the case where the current is 0 but gives a non-zero value
-    current_no = current_unique.shape[0] #find the number of unique values
-    
-    # Removing current values that are not wanted to "threshold" the current data
-    if Reduced_current != False:
-        new_current_no = current_no - 2*Reduced_current
-    # Initialize an empty np array to store the sliced data
-        data_sliced_np = np.zeros([int(data_import_np.shape[0]*(new_current_no/current_no)),data_import_np.shape[1],data_import_np.shape[2]])
-        
-        # Clip the starting and ending current values by the index of Reduced_current
-        for i in range(Reduced_current, current_no - Reduced_current):
-            #Slice the data for each current point and store in correct position in new array (now jumping by new_current_no compared to current_no)
-            data_sliced_np[i-Reduced_current::new_current_no,:,:] = data_import_np[i::current_no, :, :] 
+        #### Step 1: Extract the rounded Current, Temperature, and Field values used from the data
 
-        # Update data_import_np with the sliced data
-        data_import_np = data_sliced_np
-        
-        # Update the current variables
-        current_no = current_no - 2*Reduced_current
-        current_unique = current_unique[Reduced_current:- Reduced_current]
-        
-        
-    
-    # Find the rounded values of temperature used and the number of unique temperature points
-    temp_round = np.round(data_import_np[:,0,0],decimals=0)
-    temp_unique, temp_unique_counts = np.unique(temp_round, return_counts = True)
+        # Find the rounded values of current used and the number of unique current points
+        current_round = round_to_sf(data_import_np[:,2,0],2) #round to 2 significant figures
+        current_unique = np.unique(current_round) #find the unique values
+        current_unique[(current_unique > -1e-13) & (current_unique < 1e-13)] = 0 #handles the case where the current is 0 but gives a non-zero value
+        current_no = current_unique.shape[0] #find the number of unique values
 
-    # Checking for Erronous temperares that are slightly off from the SET value but are not new temperature setponts
-    # Set threshold of 80% of the mean temperature frequency, any temperatures appearing below this frequency are considered an error   
-    if temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8].shape[0] >= 1:
-        print('tempshape',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8].shape[0])
-        print('WARNING Potential Temperature Issues: The erronous temperature points are:',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8])
-        # Remove the erronous temperature points that don't appear frequently enough thus are probably from temperature fluctuations
-        temp_unique = temp_unique[temp_unique_counts >= np.mean(temp_unique_counts)*0.8]
-    temp_no = temp_unique.shape[0]
-    
-    # Find the rounded values of field used and the number of unique field points
-    # Can't use the np.unique for field as there are repeats of 0 field so it would miscount the field points used per loop
-    field_no = int(data_import_np.shape[0]/temp_no/current_no)
-    field_unique = data_import_np[0:current_no*field_no:current_no,1,0]
-    
-    if Reduced_temp != False:
-        data_import_np = data_import_np[Reduced_temp[0]*current_no*field_no:Reduced_temp[1]*current_no*field_no,:,:]
-        
-         # Find the rounded values of temperature used and the number of unique temperature points
+        # Removing current values that are not wanted to "threshold" the current data
+        if Reduced_current != False:
+            new_current_no = current_no - 2*Reduced_current
+        # Initialize an empty np array to store the sliced data
+            data_sliced_np = np.zeros([int(data_import_np.shape[0]*(new_current_no/current_no)),data_import_np.shape[1],data_import_np.shape[2]])
+            
+            # Clip the starting and ending current values by the index of Reduced_current
+            for i in range(Reduced_current, current_no - Reduced_current):
+                #Slice the data for each current point and store in correct position in new array (now jumping by new_current_no compared to current_no)
+                data_sliced_np[i-Reduced_current::new_current_no,:,:] = data_import_np[i::current_no, :, :] 
+
+            # Update data_import_np with the sliced data
+            data_import_np = data_sliced_np
+            
+            # Update the current variables
+            current_no = current_no - 2*Reduced_current
+            current_unique = current_unique[Reduced_current:- Reduced_current]
+            
+            
+
+        # Find the rounded values of temperature used and the number of unique temperature points
         temp_round = np.round(data_import_np[:,0,0],decimals=0)
-        temp_unique = np.unique(temp_round)
+        temp_unique, temp_unique_counts = np.unique(temp_round, return_counts = True)
+
+        # Checking for Erronous temperares that are slightly off from the SET value but are not new temperature setponts
+        # Set threshold of 80% of the mean temperature frequency, any temperatures appearing below this frequency are considered an error   
+        if temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8].shape[0] >= 1:
+            print('tempshape',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8].shape[0])
+            print('WARNING Potential Temperature Issues: The erronous temperature points are:',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8])
+            # Remove the erronous temperature points that don't appear frequently enough thus are probably from temperature fluctuations
+            temp_unique = temp_unique[temp_unique_counts >= np.mean(temp_unique_counts)*0.8]
         temp_no = temp_unique.shape[0]
-    
-    # If reorder is true, reorder the field values so they are in ascending order from -H max to H max 
-    if reorder == True:
-        field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[:int(field_no/2)]))
-    
-    # Store the current, temperature and field data in an array to output from the function for later use
-    ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
-    
-    print(ctf[3],'Currents (uA):',ctf[0]/1e-6)  
-    print(ctf[4],'Temperatures (K):',ctf[1])
-    print(ctf[5],'Fields (kOe):',np.round(ctf[2]*10,decimals=0))
-    print('Is this correct?')
-    ### Step 2: Re-order the main data  aray so that the H fields go in ascending order (data was taken e.g. H = 0, 2, 4, -4, -2, 0 -> -4,-2, 0, 0, 2, 4, 0)
-    
-    if reorder == True:
-        # Initialise empty array same shape as data_import_np to store the reordered data
-        data_np_reorder = np.zeros_like(data_import_np)
-        for T in range(ctf[4]):
-            h_1 = int(T*ctf[3]*ctf[5])
-            h_2 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]/2)
-            h_3 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5])
-            data_np_reorder[h_1:h_1+ctf[3]*ctf[5],:] = np.concatenate((data_import_np[h_2:h_3,:],data_import_np[h_1:h_2,:]), axis = 0)
-        
-        data_out = data_np_reorder
-    # If reorder is false, return the data as it was imported    
-    else: 
-        data_out = data_import_np
-        
-    #### Step 3: Extract the true temperature and field values averaged over all the index values
 
-    #initialize empty array to store the temp and field values averaged over each set of currents and each index value
-    tf_av = np.zeros((ctf[4]*ctf[5],2,6))
+        # Find the rounded values of field used and the number of unique field points
+        # Can't use the np.unique for field as there are repeats of 0 field so it would miscount the field points used per loop
+        field_no = int(data_import_np.shape[0]/temp_no/current_no)
+        field_unique = data_import_np[0:current_no*field_no:current_no,1,0]
+
+        if Reduced_temp != False:
+            data_import_np = data_import_np[Reduced_temp[0]*current_no*field_no:Reduced_temp[1]*current_no*field_no,:,:]
+            
+                # Find the rounded values of temperature used and the number of unique temperature points
+            temp_round = np.round(data_import_np[:,0,0],decimals=0)
+            temp_unique = np.unique(temp_round)
+            temp_no = temp_unique.shape[0]
+
+        # If reorder is true, reorder the field values so they are in ascending order from -H max to H max 
+        if reorder == True:
+            field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[:int(field_no/2)]))
+
+        # Store the current, temperature and field data in an array to output from the function for later use
+        ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
+        print('For file:',ppms.filename)
+        print(ctf[3],'Currents (uA):',ctf[0]/1e-6)  
+        print(ctf[4],'Temperatures (K):',ctf[1])
+        print(ctf[5],'Fields (kOe):',np.round(ctf[2]*10,decimals=0))
+        print('Is this correct?')
+        ### Step 2: Re-order the main data  aray so that the H fields go in ascending order (data was taken e.g. H = 0, 2, 4, -4, -2, 0 -> -4,-2, 0, 0, 2, 4, 0)
+
+        if reorder == True:
+            # Initialise empty array same shape as data_import_np to store the reordered data
+            data_np_reorder = np.zeros_like(data_import_np)
+            for T in range(ctf[4]):
+                h_1 = int(T*ctf[3]*ctf[5])
+                h_2 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]/2)
+                h_3 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5])
+                data_np_reorder[h_1:h_1+ctf[3]*ctf[5],:] = np.concatenate((data_import_np[h_2:h_3,:],data_import_np[h_1:h_2,:]), axis = 0)
+            
+            data_out = data_np_reorder
+        # If reorder is false, return the data as it was imported    
+        else: 
+            data_out = data_import_np
+            
+        #### Step 3: Extract the true temperature and field values averaged over all the index values
+
+        #initialize empty array to store the temp and field values averaged over each set of currents and each index value
+        tf_av = np.zeros((ctf[4]*ctf[5],2,6))
+
+        # slice the data for each current point and sum them, dividing by the total number to get the field and temperature averaged over all the currents
+        for i in range(current_no):
+                    tf_av += data_out[i::current_no,:2,:]/current_no
+        #sum over all the index values and divide by the number of indexes to get average temp and fields for each full set of electrical measurements (index 0-6)
+        tf_av = np.sum(tf_av, axis=2)/np.shape(data_out)[2]
+
+        #### Step 4: Convert the numpy array to a pandas dataframe for checking values are correct and return the data
+        data_out_df = pd.DataFrame(data_out[:,:,2], columns=['Temp (K)', 'Field (T)', 'Source (A)', 'Source (V)', 'Sense (V)'])    
+
+        ppms.data_np = data_out
+        ppms.data_df = data_out_df
+        ppms.ctf = ctf
+        ppms.tf_av = tf_av
     
-    # slice the data for each current point and sum them, dividing by the total number to get the field and temperature averaged over all the currents
-    for i in range(current_no):
-                tf_av += data_out[i::current_no,:2,:]/current_no
-    #sum over all the index values and divide by the number of indexes to get average temp and fields for each full set of electrical measurements (index 0-6)
-    tf_av = np.sum(tf_av, axis=2)/np.shape(data_out)[2]
-
-    #### Step 4: Convert the numpy array to a pandas dataframe for checking values are correct and return the data
-    data_out_df = pd.DataFrame(data_out[:,:,2], columns=['Temp (K)', 'Field (T)', 'Source (A)', 'Source (V)', 'Sense (V)'])    
-
-    return ctf, tf_av, data_out, data_out_df
+    return PPMS_files
 
     
 
