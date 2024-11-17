@@ -25,6 +25,7 @@ class PPMSData:
     hall_coefficient: np.ndarray = None #Hall coefficient data calculated for each temperature: columns = ['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average']
     hall_coefficient_df: pd.DataFrame = None #Hall coefficient data calculated for each temperature in a pandas dataframe
     
+    directory: str = None #directory of the data
     filename: str = None #filename of the data
     film_thickness: float = None  #thickness of the film in meters - set to 1 as default, if set to 1 then you are calculating sheet resistance not resistivity
     material: str = None #material of the film
@@ -89,8 +90,21 @@ def import_ppms_data(path, film_thickness = 1.0, material = 'NA', plot_str = 'NA
         ppms_np = np.array([ndnp[q::6,:-1] for q in range(6)])
         ppms_np = ppms_np.transpose(1,2,0)   
         
+        #Output directory to save plots and PowerPoint to - always defined by the first data set
+        # Replace '/Data/' with '/Output/' in the path
+        # Ensure the path is a string and replace '/Data/' with '/Output/'
+        path_str = str(path)
+        path_out_str = path_str.replace('/Data', '/Output')
+        # Ensure the path ends with a trailing slash
+
+        if not path_out_str.endswith('/'):
+            path_out = Path(path_out_str + '/')
+            
+        # Convert back to Path object
+        path_out = Path(path_out_str)
+        
         # Store the extracted data into a list of PPMSData objects
-        PPMS_files.append(PPMSData(data_import_np = ppms_np, data_import_df = ppms_df, filename = fi, film_thickness = film_thickness, material = material, plot_str = plot_str))
+        PPMS_files.append(PPMSData(data_import_np = ppms_np, data_import_df = ppms_df, filename = fi, film_thickness = film_thickness, material = material, directory = path_out, plot_str = plot_str))
         
         # Print the filenames of the imported data to check they are correct along with the shape of the numpy array
         print(f'File {count+1} imported: {fi} with shape {ppms_np.shape}')
@@ -300,13 +314,14 @@ def vdp_resistivity(PPMS_files):
 
 
 
-def magnetoresistance(PPMS_files):
+def magnetoresistance(PPMS_files, exclude_res = False):
     '''Calculates the magnetoresistance of a thin film sample using the Van der Pauw method.
     Outputs the magnetoresistance values for each temperature and field strength.
     Third index stores the magnetoresistance value for rho_A, rho_B, and the average of the two: rho_film to look at any ayssmetries with direction'''
     
     # Calculate the resistivity of the thin film sample using the Van der Pauw method - hopefully overwriting and not double operating
-    PPMS_files = vdp_resistivity(PPMS_files)
+    if exclude_res == False:
+        PPMS_files = vdp_resistivity(PPMS_files)
     for ppms in PPMS_files:
         # Extract the required data from the PPMSData object
         film_thickness = ppms.film_thickness

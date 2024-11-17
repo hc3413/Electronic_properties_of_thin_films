@@ -17,7 +17,8 @@ from pptx.oxml.ns import qn
 from pptx.oxml import parse_xml
 from dataclasses import dataclass, field
 from matplotlib.colors import Normalize
-
+import scipy.signal
+from scipy.stats import zscore
 
 
 
