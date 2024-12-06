@@ -159,7 +159,12 @@ def extract_ctf(PPMS_files, reorder = True,  Reduced_temp = False, Reduced_curre
 
         # Find the rounded values of temperature used and the number of unique temperature points
         temp_round = np.round(data_import_np[:,0,0],decimals=0)
-        temp_unique, temp_unique_counts = np.unique(temp_round, return_counts = True)
+        temp_unique, unique_indices, temp_unique_counts = np.unique(temp_round, return_index=True, return_counts=True)
+
+        # Preserve the order of unique temperatures as they appear in temp_round (i.e. the order they appear in the data thus working for ascending or desceding temp measurements)
+        sorted_order = np.argsort(unique_indices)
+        temp_unique = temp_unique[sorted_order]
+        temp_unique_counts = temp_unique_counts[sorted_order]
 
         # Checking for Erronous temperares that are slightly off from the SET value but are not new temperature setponts
         # Set threshold of 80% of the mean temperature frequency, any temperatures appearing below this frequency are considered an error   
@@ -367,7 +372,7 @@ def vdp_hall(PPMS_files):
         hall_data = np.zeros((ctf[4]*ctf[5], 7))
         
         # Initialize an empty np array to store the Temperature, Hall coefficient A, R^2 A, Hall Coefficient B, and average Hall coefficients
-        hall_coefficient = np.zeros((ctf[4], 6))
+        hall_coefficient = np.zeros((ctf[4], 8))
 
         #Loop over each temperature using regression on the hall_resistivity-field  data to obtain the Hall coefficient at each temperature
         for T in range(ctf[4]):
@@ -386,7 +391,7 @@ def vdp_hall(PPMS_files):
                 #Regression on (x,y) = (I_source, V_measured)
                 R_13_42 = linregress(data_np[increment:ctf[3]+increment,2,0], data_np[increment:ctf[3]+increment,4,0])    
                 #Hall resistance in configuration B (with source and sense leads swapped)
-                R_24_31 = linregress(data_np[increment:ctf[3]+increment,2,0], data_np[increment:ctf[3]+increment,4,0])
+                R_24_31 = linregress(data_np[increment:ctf[3]+increment,2,1], data_np[increment:ctf[3]+increment,4,1])
                 
                 # Average the two solutions for the final sheet resistivity
                 R_hall_average = (R_13_42[0] + R_24_31[0]) / 2
@@ -400,15 +405,17 @@ def vdp_hall(PPMS_files):
             HC_13_42 = linregress(hall_data[T*ctf[5]:(T+1)*ctf[5],1], hall_data[T*ctf[5]:(T+1)*ctf[5],2])    
             #Hall Coefficient in configuration B (with source and sense leads swapped)
             HC_24_31 = linregress(hall_data[T*ctf[5]:(T+1)*ctf[5],1], hall_data[T*ctf[5]:(T+1)*ctf[5],4])
+            # Hall coefficient average
+            HC_av = linregress(hall_data[T*ctf[5]:(T+1)*ctf[5],1], hall_data[T*ctf[5]:(T+1)*ctf[5],6])
             
-            hall_coefficient[T,:] = [tf_av[i,0], HC_13_42[0], HC_13_42[2], HC_24_31[0],HC_24_31[2], (HC_13_42[0]+HC_24_31[0])/2]
+            hall_coefficient[T,:] = [tf_av[i,0], HC_13_42[0], HC_13_42[2], HC_24_31[0],HC_24_31[2], (HC_13_42[0]+HC_24_31[0])/2,HC_av[0],HC_av[2]]
             
         
         # Convert the numpy array to a pandas dataframe for the Hall resistivity
         hall_data_df = pd.DataFrame(hall_data, columns=['Temp (K)', 'Field (T)', 'rho_xy_A(ohm.m)', 'R_squared(I)_A', 'rho_xy_B(ohm.m)','R_squared(I)_B', 'rho_xy_average(ohm.m)'])
         
         # Convert the numpy array to a pandas dataframe for the Hall coefficeint
-        hall_coefficient_df = pd.DataFrame(hall_coefficient, columns=['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average'])
+        hall_coefficient_df = pd.DataFrame(hall_coefficient, columns=['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average','Hallco_on_average','R^2(H)_average'])
         
         # Store the data in the PPMSData object
         ppms.hall_data = hall_data
