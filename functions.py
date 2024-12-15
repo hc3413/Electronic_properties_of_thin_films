@@ -41,6 +41,8 @@ def import_ppms_data(path, film_thickness = 1.0, material = 'NA', plot_str = 'NA
     PPMS_files = []
     # Get a list of all the files in the directory
     files = [Path(f) for f in os.listdir(path)]
+    # Sort the files alphabetically
+    files.sort()
     # Loop over all files in the directory extracting the data as a df, converting it to a numpy array, and slicing it to separete index values into a third dimension
     for count, fi in enumerate(files):  
                     
