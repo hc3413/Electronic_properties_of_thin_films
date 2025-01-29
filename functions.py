@@ -33,7 +33,7 @@ class PPMSData:
     
 
 
-def import_ppms_data(path, film_thickness = 1.0, material = 'NA', plot_str = 'NA'):
+def import_ppms_data(path, film_thickness = 1.0, material = 'NA', plot_str = 'NA', V_inv = False):
     '''
     This function imports the data from the PPMS instrument.
     Note that it converts the field from Oe to Tesla. (strictlys speaking from H to B)
@@ -71,6 +71,11 @@ def import_ppms_data(path, film_thickness = 1.0, material = 'NA', plot_str = 'NA
         ppms_df['Sense (V)'] = pd.to_numeric(ppms_df['Sense (V)'], errors='coerce')
         ppms_df['index'] = pd.to_numeric(ppms_df['index'], downcast='integer', errors='coerce')
     
+        if V_inv == True:
+            # Multiply the 'Sense (V)' column by -1 for only HC011
+            ppms_df['Sense (V)'] *= -1
+        
+
 
         # Drop rows where all values are NaN (e.g., empty lines)
         ppms_df.dropna(how='all', inplace=True)
@@ -302,7 +307,7 @@ def vdp_resistivity(PPMS_files):
             # Then apply an approximate scaling factor to convert the two terminal resistance to the sheet resistance
             R_to_rho_scaling =  1e-1 #15 ohm two terminal goes to 0.06 ohm.m therefore mutliply the the two terminal by 4e-3 to get the approx sheet resistance
             initial_guess = R_to_rho_scaling*R_twoterminal
-            print('Initial Guess for rho_sheet:',initial_guess, 'ohm/sq', ppms.plot_str)
+
 
             ##### Solve the Van der Pauw equation for both pairs of configurations
 
@@ -321,7 +326,8 @@ def vdp_resistivity(PPMS_files):
 
             # Average the two solutions for the final sheet resistivity
             R_sheet = (R_sheet_A + R_sheet_B) / 2
-            print('R_sheet_calc = ', R_sheet, 'ohm/sq', ppms.plot_str)
+            print(f'(R_s_Guess, R_s_calc) = ({initial_guess:.1e}, {R_sheet:.1e}) ohm/sq - {ppms.plot_str}')
+     
             
             # Step 3: Insert the new row to the np data array
             res_data[i,:] = [tf_av[i,0], tf_av[i,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness]
