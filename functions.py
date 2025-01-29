@@ -70,6 +70,7 @@ def import_ppms_data(path, film_thickness = 1.0, material = 'NA', plot_str = 'NA
         ppms_df['Source (V)'] = pd.to_numeric(ppms_df['Source (V)'], errors='coerce')
         ppms_df['Sense (V)'] = pd.to_numeric(ppms_df['Sense (V)'], errors='coerce')
         ppms_df['index'] = pd.to_numeric(ppms_df['index'], downcast='integer', errors='coerce')
+    
 
         # Drop rows where all values are NaN (e.g., empty lines)
         ppms_df.dropna(how='all', inplace=True)
@@ -119,6 +120,31 @@ def round_to_sf(x, p):
     mags = 10 ** (p - 1 - np.floor(np.log10(x_positive)))
     return np.round(x * mags) / mags
 
+def unique_T_values(data_import_np):
+    '''extract the number of temperature points used in the measurements
+    Finding the unique discrete temperature points accounting for a small variation in the temperature setpoint
+    also large temperature ranges - thus can't just use decimal points alone or s.f. to find unique values'''
+    # Find the rounded values of temperature used and the number of unique temperature points
+    temp_round = np.round(data_import_np[:,0,0],decimals=0)
+    temp_unique, unique_indices, temp_unique_counts = np.unique(temp_round, return_index=True, return_counts=True)
+    
+    # Preserve the order of unique temperatures as they appear in temp_round (i.e. the order they appear in the data thus working for ascending or desceding temp measurements)
+    sorted_order = np.argsort(unique_indices)
+    temp_unique = temp_unique[sorted_order]
+    temp_unique_counts = temp_unique_counts[sorted_order]
+    
+    # Checking for Erronous temperares that are slightly off from the SET value but are not new temperature setponts
+    # Set threshold of 80% of the mean temperature frequency, any temperatures appearing below this frequency are considered an error   
+    if temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.80].shape[0] >= 1:
+        print('tempshape',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8].shape[0])
+        print('WARNING Potential Temperature Issues: The erronous temperature points are:',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8])
+        # Remove the erronous temperature points that don't appear frequently enough thus are probably from temperature fluctuations
+        temp_unique = temp_unique[temp_unique_counts >= np.mean(temp_unique_counts)*0.8]
+    
+    temp_no = temp_unique.shape[0]
+    
+    return temp_no, temp_unique
+
 def extract_ctf(PPMS_files, reorder = True,  Reduced_temp = False, Reduced_current = False):
     '''extract the number of temperature, field and current points used in the measurements
     Also extract the rounded values of the temperature, field and current used in the measurements
@@ -156,26 +182,9 @@ def extract_ctf(PPMS_files, reorder = True,  Reduced_temp = False, Reduced_curre
             # Update the current variables
             current_no = current_no - 2*Reduced_current
             current_unique = current_unique[Reduced_current:- Reduced_current]
-            
-            
-
-        # Find the rounded values of temperature used and the number of unique temperature points
-        temp_round = np.round(data_import_np[:,0,0],decimals=0)
-        temp_unique, unique_indices, temp_unique_counts = np.unique(temp_round, return_index=True, return_counts=True)
-
-        # Preserve the order of unique temperatures as they appear in temp_round (i.e. the order they appear in the data thus working for ascending or desceding temp measurements)
-        sorted_order = np.argsort(unique_indices)
-        temp_unique = temp_unique[sorted_order]
-        temp_unique_counts = temp_unique_counts[sorted_order]
-
-        # Checking for Erronous temperares that are slightly off from the SET value but are not new temperature setponts
-        # Set threshold of 80% of the mean temperature frequency, any temperatures appearing below this frequency are considered an error   
-        if temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8].shape[0] >= 1:
-            print('tempshape',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8].shape[0])
-            print('WARNING Potential Temperature Issues: The erronous temperature points are:',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8])
-            # Remove the erronous temperature points that don't appear frequently enough thus are probably from temperature fluctuations
-            temp_unique = temp_unique[temp_unique_counts >= np.mean(temp_unique_counts)*0.8]
-        temp_no = temp_unique.shape[0]
+    
+        # Extract the unique temperature values and the number of unique temperature points
+        [temp_no, temp_unique] = unique_T_values(data_import_np)
 
         # Find the rounded values of field used and the number of unique field points
         # Can't use the np.unique for field as there are repeats of 0 field so it would miscount the field points used per loop
@@ -183,12 +192,10 @@ def extract_ctf(PPMS_files, reorder = True,  Reduced_temp = False, Reduced_curre
         field_unique = data_import_np[0:current_no*field_no:current_no,1,0]
 
         if Reduced_temp != False:
-            data_import_np = data_import_np[Reduced_temp[0]*current_no*field_no:Reduced_temp[1]*current_no*field_no,:,:]
+            data_import_np = data_import_np[Reduced_temp[0]*current_no*field_no:(temp_no + Reduced_temp[1])*current_no*field_no,:,:]
             
-                # Find the rounded values of temperature used and the number of unique temperature points
-            temp_round = np.round(data_import_np[:,0,0],decimals=0)
-            temp_unique = np.unique(temp_round)
-            temp_no = temp_unique.shape[0]
+            # Repeat the extraction of the unique temperature values and the number of unique temperature points for the new data
+            [temp_no, temp_unique] = unique_T_values(data_import_np)
 
         # If reorder is true, reorder the field values so they are in ascending order from -H max to H max 
         if reorder == True:
@@ -288,20 +295,33 @@ def vdp_resistivity(PPMS_files):
 
             # Append the R-squared value to the list
             R_squared.extend([R_32_10[2], R_20_31[2], R_01_23[2], R_13_02[2]])
+            
+            ### Initial guess for rho_sheet
+            # First calculate the two terminal resistance between two electrodes
+            R_twoterminal = linregress(data_np[increment:ctf[3]+increment,2,2], data_np[increment:ctf[3]+increment,3,2])[0]
+            # Then apply an approximate scaling factor to convert the two terminal resistance to the sheet resistance
+            R_to_rho_scaling =  1e-1 #15 ohm two terminal goes to 0.06 ohm.m therefore mutliply the the two terminal by 4e-3 to get the approx sheet resistance
+            initial_guess = R_to_rho_scaling*R_twoterminal
+            print('Initial Guess for rho_sheet:',initial_guess, 'ohm/sq', ppms.plot_str)
 
             ##### Solve the Van der Pauw equation for both pairs of configurations
-
-            # Initial guess for rho_sheet
-            initial_guess = 1.0
 
             # Solve for rho_sheet for the first pair (R_A)
             R_sheet_A = fsolve(vdp_equation, initial_guess, args=(R_32_10[0], R_20_31[0]))[0]
 
             # Solve for rho_sheet for the second pair (R_B)
             R_sheet_B = fsolve(vdp_equation, initial_guess, args=(R_01_23[0], R_13_02[0]))[0]
+            
+            
+            # Solve for isotropic film using parallel R_A
+            #R_sheet_A_isotropic = fsolve(vdp_equation, initial_guess, args=(R_32_10[0], R_01_23[0]))[0]
+
+            # Solve for isotropic film using parallel R_B
+            #R_sheet_B_isotropic = fsolve(vdp_equation, initial_guess, args=(R_20_31[0], R_13_02[0]))[0]
 
             # Average the two solutions for the final sheet resistivity
             R_sheet = (R_sheet_A + R_sheet_B) / 2
+            print('R_sheet_calc = ', R_sheet, 'ohm/sq', ppms.plot_str)
             
             # Step 3: Insert the new row to the np data array
             res_data[i,:] = [tf_av[i,0], tf_av[i,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness]
