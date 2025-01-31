@@ -319,10 +319,10 @@ def vdp_resistivity(PPMS_files):
             
             
             # Solve for isotropic film using parallel R_A
-            #R_sheet_A_isotropic = fsolve(vdp_equation, initial_guess, args=(R_32_10[0], R_01_23[0]))[0]
+            #R_sheet_A = fsolve(vdp_equation, initial_guess, args=(R_32_10[0], R_01_23[0]))[0]
 
             # Solve for isotropic film using parallel R_B
-            #R_sheet_B_isotropic = fsolve(vdp_equation, initial_guess, args=(R_20_31[0], R_13_02[0]))[0]
+            #R_sheet_B = fsolve(vdp_equation, initial_guess, args=(R_20_31[0], R_13_02[0]))[0]
 
             # Average the two solutions for the final sheet resistivity
             R_sheet = (R_sheet_A + R_sheet_B) / 2

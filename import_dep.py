@@ -20,6 +20,13 @@ from matplotlib.colors import Normalize
 from matplotlib.cm import ScalarMappable
 import scipy.signal
 from scipy.stats import zscore
+import scienceplots
+
+
+# Enable LaTeX for text rendering
+plt.rcParams['text.usetex'] = True
+
+plt.style.use(['science', 'grid'])
 
 
 
