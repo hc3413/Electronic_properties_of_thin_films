@@ -257,7 +257,7 @@ def vdp_equation(rho_sheet, R_A, R_B):
     return np.exp(-np.pi * R_A / rho_sheet) + np.exp(-np.pi * R_B / rho_sheet) - 1
 
 
-def vdp_resistivity(PPMS_files):
+def vdp_resistivity(PPMS_files, print_val = False):
     '''Calculates the resistivity of a thin film sample using the Van der Pauw method.
     The measurments for this were done in index values of 2,3,4,5 
     Each index value corresponds to a different configuration of the source and sense leads.
@@ -326,7 +326,8 @@ def vdp_resistivity(PPMS_files):
 
             # Average the two solutions for the final sheet resistivity
             R_sheet = (R_sheet_A + R_sheet_B) / 2
-            print(f'(R_s_Guess, R_s_calc) = ({initial_guess:.1e}, {R_sheet:.1e}) ohm/sq - {ppms.plot_str}')
+            if print_val == True:
+                print(f'(R_s_Guess, R_s_calc) = ({initial_guess:.1e}, {R_sheet:.1e}) ohm/sq - {ppms.plot_str}')
      
             
             # Step 3: Insert the new row to the np data array
