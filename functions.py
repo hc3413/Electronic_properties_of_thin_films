@@ -39,7 +39,7 @@ def import_ppms_data(path, film_thickness = 1.0, material = 'NA', plot_str = 'NA
     Note that it converts the field from Oe to Tesla. (strictlys speaking from H to B)
     '''
     PPMS_files = []
-    # Get a list of all the files in the directory
+    # Get a list of all the files in the directory converting them to Path objects
     files = [Path(f) for f in os.listdir(path)]
     # Sort the files alphabetically
     files.sort()
