@@ -213,8 +213,8 @@ def extract_ctf(PPMS_files, reorder = True,  Reduced_temp = False, Reduced_curre
         print(ctf[4],'Temperatures (K):',ctf[1])
         print(ctf[5],'Fields (kOe):',np.round(ctf[2]*10,decimals=0))
         print('Is this correct?')
+        
         ### Step 2: Re-order the main data  aray so that the H fields go in ascending order (data was taken e.g. H = 0, 2, 4, -4, -2, 0 -> -4,-2, 0, 0, 2, 4, 0)
-
         if reorder == True:
             # Initialise empty array same shape as data_import_np to store the reordered data
             data_np_reorder = np.zeros_like(data_import_np)
@@ -257,13 +257,17 @@ def vdp_equation(rho_sheet, R_A, R_B):
     return np.exp(-np.pi * R_A / rho_sheet) + np.exp(-np.pi * R_B / rho_sheet) - 1
 
 
-def vdp_resistivity(PPMS_files, print_val = False):
+def vdp_resistivity(PPMS_files, print_val = False, resistivity_guess = 0):
     '''Calculates the resistivity of a thin film sample using the Van der Pauw method.
     The measurments for this were done in index values of 2,3,4,5 
     Each index value corresponds to a different configuration of the source and sense leads.
     These 4 index configurations are split into 2 pairs of configurations, with each pair being able to generate the resistivity of the film independantly.
-    Four configurations were used for robustness, to enable a comparison of the resistivity values obtained with the source/sense positions swapped.'''
-  
+    Four configurations were used for robustness, to enable a comparison of the resistivity values obtained with the source/sense positions swapped.
+    
+    resistivity_guess: is the initial guess for the sheet resistivity, if set to 0 then the initial guess is calculated from an approximation with scaling factor
+    
+    '''
+    
     for ppms in PPMS_files:
         # Extract the required data from the PPMSData object
         film_thickness = ppms.film_thickness
@@ -301,12 +305,14 @@ def vdp_resistivity(PPMS_files, print_val = False):
             # Append the R-squared value to the list
             R_squared.extend([R_32_10[2], R_20_31[2], R_01_23[2], R_13_02[2]])
             
-            ### Initial guess for rho_sheet
-            # First calculate the two terminal resistance between two electrodes
-            R_twoterminal = linregress(data_np[increment:ctf[3]+increment,2,2], data_np[increment:ctf[3]+increment,3,2])[0]
-            # Then apply an approximate scaling factor to convert the two terminal resistance to the sheet resistance
-            R_to_rho_scaling =  1e-1 #15 ohm two terminal goes to 0.06 ohm.m therefore mutliply the the two terminal by 4e-3 to get the approx sheet resistance
-            initial_guess = R_to_rho_scaling*R_twoterminal
+            ### Initial guess for rho_sheet based off an approximate scaling factor from source I, sense V data
+            if resistivity_guess == 0:
+                R_to_rho_scaling =  4 #scaling factor 
+                initial_guess = R_32_10[0]* R_to_rho_scaling 
+            else:
+                # Use the user defined initial guess
+                initial_guess = resistivity_guess
+  
 
 
             ##### Solve the Van der Pauw equation for both pairs of configurations
@@ -327,7 +333,7 @@ def vdp_resistivity(PPMS_files, print_val = False):
             # Average the two solutions for the final sheet resistivity
             R_sheet = (R_sheet_A + R_sheet_B) / 2
             if print_val == True:
-                print(f'(R_s_Guess, R_s_calc) = ({initial_guess:.1e}, {R_sheet:.1e}) ohm/sq - {ppms.plot_str}')
+                print(f'(R_s_Guess, R_s_calc) = ({initial_guess:.1e}, {R_sheet:.1e}) ohm/sq - {ppms.filename}')
      
             
             # Step 3: Insert the new row to the np data array
