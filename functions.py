@@ -8,6 +8,7 @@ class PPMSData:
     data_import_df: pd.DataFrame = None #data from the PPMS instrument in a pandas dataframe
     
     data_np: np.ndarray = None #PPMS data sliced and reordered for analysis
+    data_np_nd: np.ndarray = None #PPMS data sliced into a multi-dimensional numpy array with the dimensions (temperature, field, current, columns, index)
     data_df: pd.DataFrame = None #PPMS data sliced and reordered for analysis in a pandas dataframe
     
     ctf: list = None # Storing extract values from data [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
@@ -150,14 +151,17 @@ def unique_T_values(data_import_np):
     
     return temp_no, temp_unique
 
-def extract_ctf(PPMS_files, reorder = True,  Reduced_temp = False, Reduced_current = False):
+def extract_ctf(PPMS_files, reorder = 'double',  Reduced_temp = False, Reduced_current = False):
     '''extract the number of temperature, field and current points used in the measurements
     Also extract the rounded values of the temperature, field and current used in the measurements
     These rounded values can be displayed to check they are as expected where the true more accurate values are used for the calculations
     tf_av are the true, meausured average temperature and field values used for each set of current measurements
     Reduced_temp = [3,-1] will skip the first 3 temperature points and the last 1 temperature point
     Reduced_current = 2 will skip the first 2 current points and the last 2 current points
-    Re-order (on by default) rearranges the field values so they are in ascending order from -H max to H max'''
+    Re-order rearranges the field values so they are in ascending order from -H max to H max
+        double: for data originally from 0->Bmax->-Bmax->0
+        single: for data originally from 0->-Bmax->0->Bmax
+    '''
     
     for ppms in PPMS_files:
         data_import_np = ppms.data_import_np
@@ -202,9 +206,14 @@ def extract_ctf(PPMS_files, reorder = True,  Reduced_temp = False, Reduced_curre
             # Repeat the extraction of the unique temperature values and the number of unique temperature points for the new data
             [temp_no, temp_unique] = unique_T_values(data_import_np)
 
-        # If reorder is true, reorder the field values so they are in ascending order from -H max to H max 
-        if reorder == True:
+        ### Re-order the field values so they are in ascending order from -H max to H max 
+        # Case for field values that are originally in the order 0->Bmax->-Bmax->0
+        if reorder == 'double':
             field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[:int(field_no/2)]))
+        # Case for field values that are originally in the order 0,-Hmax->Hmax
+        elif reorder == 'single':
+            field_unique = np.concatenate((field_unique[1:int(field_no/2)],field_unique[0],field_unique[int(field_no/2):]))
+            
 
         # Store the current, temperature and field data in an array to output from the function for later use
         ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
@@ -215,7 +224,7 @@ def extract_ctf(PPMS_files, reorder = True,  Reduced_temp = False, Reduced_curre
         print('Is this correct?')
         
         ### Step 2: Re-order the main data  aray so that the H fields go in ascending order (data was taken e.g. H = 0, 2, 4, -4, -2, 0 -> -4,-2, 0, 0, 2, 4, 0)
-        if reorder == True:
+        if reorder == 'double':
             # Initialise empty array same shape as data_import_np to store the reordered data
             data_np_reorder = np.zeros_like(data_import_np)
             for T in range(ctf[4]):
@@ -242,8 +251,24 @@ def extract_ctf(PPMS_files, reorder = True,  Reduced_temp = False, Reduced_curre
 
         #### Step 4: Convert the numpy array to a pandas dataframe for checking values are correct and return the data
         data_out_df = pd.DataFrame(data_out[:,:,2], columns=['Temp (K)', 'Field (T)', 'Source (A)', 'Source (V)', 'Sense (V)'])    
+        
+        #### Step 5: Store Data in multi dimensional np array of vectors 
+        #### previously: array has (rows, columns, index) dimensions
+        ### new: (temperature (ctf[4]), field(ctf[5]), current (ctf[3]), columns (temp, field, source A, source V, sense V), index(6))
+        # Parameters for reshaping the data
+        colums = 5
+        temps = ctf[4]
+        fields = ctf[5]
+        currents = ctf[3]
+        indexes = 6
+        # Reshape the data
+        data_out_nd = np.reshape(data_out, (temps, fields, currents, colums, indexes))
+
+        
+        #### Step 6: Store the data in the PPMSData object
 
         ppms.data_np = data_out
+        ppms.data_np_nd = data_out_nd
         ppms.data_df = data_out_df
         ppms.ctf = ctf
         ppms.tf_av = tf_av
