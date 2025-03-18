@@ -212,7 +212,7 @@ def extract_ctf(PPMS_files, reorder = 'double',  Reduced_temp = False, Reduced_c
             field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[:int(field_no/2)]))
         # Case for field values that are originally in the order 0,-Hmax->Hmax
         elif reorder == 'single':
-            field_unique = np.concatenate((field_unique[1:int(field_no/2)],field_unique[0],field_unique[int(field_no/2):]))
+            field_unique = np.concatenate((field_unique[1:int(field_no/2)],np.array([field_unique[0]]),field_unique[int(field_no/2):]))
             
 
         # Store the current, temperature and field data in an array to output from the function for later use
@@ -228,12 +228,27 @@ def extract_ctf(PPMS_files, reorder = 'double',  Reduced_temp = False, Reduced_c
             # Initialise empty array same shape as data_import_np to store the reordered data
             data_np_reorder = np.zeros_like(data_import_np)
             for T in range(ctf[4]):
-                h_1 = int(T*ctf[3]*ctf[5])
-                h_2 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]/2)
-                h_3 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5])
-                data_np_reorder[h_1:h_1+ctf[3]*ctf[5],:] = np.concatenate((data_import_np[h_2:h_3,:],data_import_np[h_1:h_2,:]), axis = 0)
+                h_1 = int(T*ctf[3]*ctf[5]) #start
+                h_2 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]/2) #middle
+                h_3 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]) #end
+                data_np_reorder[h_1:h_3,:] = np.concatenate((data_import_np[h_2:h_3,:],data_import_np[h_1:h_2,:]), axis = 0)
             
+            # Store the reordered data in the data_out variable
             data_out = data_np_reorder
+        
+        elif reorder == 'single':
+            # Initialise empty array same shape as data_import_np to store the reordered data
+            data_np_reorder = np.zeros_like(data_import_np)
+            for T in range(ctf[4]):
+                h_0 = int(T*ctf[3]*ctf[5]) #first value
+                h_1 = int(T*ctf[3]*ctf[5])+ctf[3] #second value
+                h_2 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]/2) #halfway point
+                h_3 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]) #last value
+                data_np_reorder[h_0:h_3,:] = np.concatenate((data_import_np[h_1:h_2,:],data_import_np[h_0:h_1,:],data_import_np[h_2:h_3,:]), axis = 0)
+            
+            # Store the reordered data in the data_out variable
+            data_out = data_np_reorder
+        
         # If reorder is false, return the data as it was imported    
         else: 
             data_out = data_import_np
