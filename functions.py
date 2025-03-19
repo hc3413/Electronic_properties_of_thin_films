@@ -376,6 +376,9 @@ def vdp_resistivity(PPMS_files, print_val = False, resistivity_guess = 0):
                 print(f'(R_s_Guess, R_s_calc) = ({initial_guess:.1e}, {R_sheet:.1e}) ohm/sq - {ppms.filename}')
      
             
+            ## Error calculation for the resistivity values
+            # Calculate the error in the sheet resistivity
+            
             # Step 3: Insert the new row to the np data array
             res_data[i,:] = [tf_av[i,0], tf_av[i,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness]
         
