@@ -296,6 +296,29 @@ def vdp_equation(rho_sheet, R_A, R_B):
     '''Solves the Van der Pauw equation for the sheet resistivity of a thin film sample.'''
     return np.exp(-np.pi * R_A / rho_sheet) + np.exp(-np.pi * R_B / rho_sheet) - 1
 
+def Error_Rs(R_sheet,R_32_10, R_20_31):
+    '''Calculates the error in each calculation of sheet resistivity with the VDP formula by using error propogation
+    R_sheet_A is the sheet resistivity calculated from the VDP formula
+    f(R_sheet;Ra,Rb) = e^(-pi*Ra/R_sheet) + e^(-pi*Rb/R_sheet) - 1 = 0
+    df/dRa = -pi/R_sheet * e^(-pi*Ra/R_sheet)
+    df/dRb = -pi/R_sheet * e^(-pi*Rb/R_sheet)
+    df/dR_sheet = pi/R_sheet^2 * (Ra*e^(-pi*Ra/R_sheet) + Rb*e^(-pi*Rb/R_sheet))
+    dRsdRa = dR_sheet/dRa = -df/dRa/df/dR_sheet = R_sheet*e^(-pi*Ra/R_sheet)/(Ra*e^(-pi*Ra/R_sheet) + Rb*e^(-pi*Rb/R_sheet))
+    dRsdRb = dR_sheet/dRb = -df/dRb/df/dR_sheet = R_sheet*e^(-pi*Rb/R_sheet)/(Ra*e^(-pi*Ra/R_sheet) + Rb*e^(-pi*Rb/R_sheet))'''
+    R_A = R_32_10[0]
+    dRa = R_32_10[4] #R_A_error
+    R_B = R_20_31[0]
+    dRb = R_20_31[4] #R_B_error
+    # Error propogation for the sheet resistivity
+    dRsdRa = (np.exp(-np.pi * R_A / R_sheet) * R_sheet)/(R_A*np.exp(-np.pi * R_A / R_sheet) + R_B*np.exp(-np.pi * R_B / R_sheet))
+    dRsdRb = (np.exp(-np.pi * R_B / R_sheet) * R_sheet)/(R_A*np.exp(-np.pi * R_A / R_sheet) + R_B*np.exp(-np.pi * R_B / R_sheet))
+    
+    R_sheet_error = np.sqrt((dRsdRa*dRa)**2 + (dRsdRb*dRb)**2)
+    
+    return R_sheet_error
+    
+    
+
 
 def vdp_resistivity(PPMS_files, print_val = False, resistivity_guess = 0):
     '''Calculates the resistivity of a thin film sample using the Van der Pauw method.
@@ -322,8 +345,8 @@ def vdp_resistivity(PPMS_files, print_val = False, resistivity_guess = 0):
         # Find the number of measurement points at which the currents were measured (i.e each set of temperature and field values)
         points_per_index = ctf[4]*ctf[5]
         
-        # Initialize an empty np aray to store each temperature, field, and the resitivities for: config A, config B, average of A and B
-        res_data = np.zeros((points_per_index, 5))
+        # Initialize an empty np aray to store each temperature, field, and the resitivities for: config A, config B, average of A and B along with the error
+        res_data = np.zeros((points_per_index, 6))
 
         #Loop over each temperature and field combination, calculating the sheet resistivity using the Van der Pauw method
         for i in range(points_per_index):
@@ -363,6 +386,9 @@ def vdp_resistivity(PPMS_files, print_val = False, resistivity_guess = 0):
             # Solve for rho_sheet for the second pair (R_B)
             R_sheet_B = fsolve(vdp_equation, initial_guess, args=(R_01_23[0], R_13_02[0]))[0]
             
+            # Calculate the error in the sheet resistivity for each pair of configurations
+            R_sheet_A_error = Error_Rs(R_sheet_A,R_32_10, R_20_31)
+            R_sheet_B_error = Error_Rs(R_sheet_B,R_01_23, R_13_02)
             
             # Solve for isotropic film using parallel R_A
             #R_sheet_A = fsolve(vdp_equation, initial_guess, args=(R_32_10[0], R_01_23[0]))[0]
@@ -375,15 +401,16 @@ def vdp_resistivity(PPMS_files, print_val = False, resistivity_guess = 0):
             if print_val == True:
                 print(f'(R_s_Guess, R_s_calc) = ({initial_guess:.1e}, {R_sheet:.1e}) ohm/sq - {ppms.filename}')
      
+            # Calculate the error in the average sheet resistivity by progating the errors in the individual sheet resistivity values
+            R_sheet_error = 0.5*np.sqrt(R_sheet_A_error**2 + R_sheet_B_error**2)
+            resistivity_error = R_sheet_error*film_thickness # if the film thickness is 1 then this is the error in the sheet resistance
             
-            ## Error calculation for the resistivity values
-            # Calculate the error in the sheet resistivity
             
             # Step 3: Insert the new row to the np data array
-            res_data[i,:] = [tf_av[i,0], tf_av[i,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness]
+            res_data[i,:] = [tf_av[i,0], tf_av[i,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness, resistivity_error]
         
         # Convert the numpy array to a pandas dataframe then return the data in both forms along with the R-squared values
-        res_data_df = pd.DataFrame(res_data, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)'])
+        res_data_df = pd.DataFrame(res_data, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)', 'rho_error(ohm.m)'])
         
         # Store the data in the PPMSData object
         ppms.res_data = res_data
@@ -450,7 +477,7 @@ def vdp_hall(PPMS_files):
         hall_data = np.zeros((ctf[4]*ctf[5], 7))
         
         # Initialize an empty np array to store the Temperature, Hall coefficient A, R^2 A, Hall Coefficient B, and average Hall coefficients
-        hall_coefficient = np.zeros((ctf[4], 8))
+        hall_coefficient = np.zeros((ctf[4], 11))
 
         #Loop over each temperature using regression on the hall_resistivity-field  data to obtain the Hall coefficient at each temperature
         for T in range(ctf[4]):
@@ -485,15 +512,36 @@ def vdp_hall(PPMS_files):
             HC_24_31 = linregress(hall_data[T*ctf[5]:(T+1)*ctf[5],1], hall_data[T*ctf[5]:(T+1)*ctf[5],4])
             # Hall coefficient average
             HC_av = linregress(hall_data[T*ctf[5]:(T+1)*ctf[5],1], hall_data[T*ctf[5]:(T+1)*ctf[5],6])
+            #print('HC_av',HC_av[0])
             
-            hall_coefficient[T,:] = [tf_av[i,0], HC_13_42[0], HC_13_42[2], HC_24_31[0],HC_24_31[2], (HC_13_42[0]+HC_24_31[0])/2,HC_av[0],HC_av[2]]
+            #calculate the charge carrier density
+            cc_density = 1e-6 * np.divide(1, np.multiply(HC_av[0], scipy.constants.e))
+            
+            ## Error calculation for the Hall coefficient values
+            # Taking the error from the linear regression of the average as this is the most accurate value
+            Hall_error = HC_av.stderr
+            #print('Hall_error',Hall_error)
+            # Charge carrier density error is calculated from error propogation
+            cc_density_error = 1e-6 *np.divide(Hall_error, np.multiply(HC_av[0]**2, scipy.constants.e))
+            #print('cc_density:',cc_density,'cc_density_error',cc_density_error)
+            
+            ### Calculate the mobility and its corresponding error
+            # Mobility is calculated from the Hall coefficient and the charge carrier density
+            resitivity = ppms.res_data[int(ppms.ctf[5]/2-1)+(T*ppms.ctf[5]),4]
+            resistivity_error = ppms.res_data[int(ppms.ctf[5]/2-1)+(T*ppms.ctf[5]),5]
+            mobility = 1e4*np.divide(HC_av[0], resitivity)
+            # Error in the mobility is calculated from error propogation (1e4 to convert to cm^2/Vs)
+            # u = Rh/rho -> d(mobility) = sqrt((du/dRh *dRh)^2 + (du/drho *drho)^2)
+            mobility_error = 1e4*np.sqrt((Hall_error/resitivity)**2 + ((HC_av[0]*resistivity_error)/resitivity**2)**2)
+            
+            hall_coefficient[T,:] = [tf_av[i,0], HC_13_42[0], HC_13_42[2], HC_24_31[0],HC_24_31[2],HC_av[0],HC_av[2], cc_density, cc_density_error, mobility, mobility_error]
             
         
         # Convert the numpy array to a pandas dataframe for the Hall resistivity
         hall_data_df = pd.DataFrame(hall_data, columns=['Temp (K)', 'Field (T)', 'rho_xy_A(ohm.m)', 'R_squared(I)_A', 'rho_xy_B(ohm.m)','R_squared(I)_B', 'rho_xy_average(ohm.m)'])
         
         # Convert the numpy array to a pandas dataframe for the Hall coefficeint
-        hall_coefficient_df = pd.DataFrame(hall_coefficient, columns=['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average','Hallco_on_average','R^2(H)_average'])
+        hall_coefficient_df = pd.DataFrame(hall_coefficient, columns=['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average','R^2(H)_average', 'Charge Carrier Density (cm^-2)', 'Charge Carrier Density Error (cm^-2)', 'Mobility (cm^2/Vs)', 'Mobility Error (cm^2/Vs)'])
         
         # Store the data in the PPMSData object
         ppms.hall_data = hall_data
