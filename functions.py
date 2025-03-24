@@ -205,17 +205,64 @@ def extract_ctf(PPMS_files, reorder = 'double',  Reduced_temp = False, Reduced_c
             
             # Repeat the extraction of the unique temperature values and the number of unique temperature points for the new data
             [temp_no, temp_unique] = unique_T_values(data_import_np)
+    
 
-        ### Re-order the field values so they are in ascending order from -H max to H max 
-        # Case for field values that are originally in the order 0->Bmax->-Bmax->0
-        if reorder == 'double':
+        
+        #### Step 2: Re-order and store  the data in multi dimensional np array of data vectors (temp, field, source A, source V, sense V)
+        # previously: array has (rows, columns, index) dimensions
+        # new: (temperature (ctf[4]), field(ctf[5]), current (ctf[3]), columns (temp, field, source A, source V, sense V), index(6))
+        # Parameters for reshaping the data
+        columns = 5
+        indexes = 6
+        # Reshape the data to: (temperature, field, current, columns (temp, field, source A, source V, sense V), index(6))
+        data_out_nd = np.reshape(data_import_np, (temp_no, field_no, current_no, columns, indexes))
+
+
+        #### Step 3: Re-order the extracted field value vector so they are in ascending order from -H max to H max 
+
+        # Case for field values that are originally in the order 0->Bmax,-Bmax->0
+        if field_unique[0] == 0 and field_unique[-1] == 0:
+            print('double: Field values originally in the order 0->Bmax,-Bmax->0')
+            
+            # Re-order the extracted field values vector
             field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[:int(field_no/2)]))
+            
+            # Re-order the main data array to have the field values in the order -Hmax->Hmax
+            data_np_nd_reorder = np.zeros_like(data_out_nd)
+            for T in range(temp_no):
+                start = 0
+                middle = int(field_no/2)
+                end = int(field_no)
+                data_np_nd_reorder = np.concatenate((data_out_nd[:,middle:end,:,:,:],data_out_nd[:,start:middle,:,:,:]), axis = 1)
+            
+            # Store the reordered data in the data_out variable
+            data_out = data_np_nd_reorder
+            
+            
         # Case for field values that are originally in the order 0,-Hmax->Hmax
-        elif reorder == 'single':
+        elif field_unique[0] == 0 and field_unique[int(field_no/2)] == 0:
+            print('single: Field values originally in the order 0,-Bmax->0->Bmax')
+            
+            # Re-order the extracted field values vector
             field_unique = np.concatenate((field_unique[1:int(field_no/2)],np.array([field_unique[0]]),field_unique[int(field_no/2):]))
             
-
-        # Store the current, temperature and field data in an array to output from the function for later use
+            # Re-order the main data array to have the field values in the order -Hmax->Hmax
+            data_np_nd_reorder = np.zeros_like(data_out_nd)
+            for T in range(temp_no):
+                start = 0
+                middle = int(field_no/2)
+                end = int(field_no)
+                data_np_nd_reorder = np.concatenate((data_out_nd[:,1:middle,:,:,:], data_out_nd[:,0,:,:,:], data_out_nd[:,middle:end,:,:,:]), axis = 1)
+            
+            # Store the reordered data in the data_out variable
+            data_out = data_np_nd_reorder
+            
+        else:
+            print('Warning: no recognised field order therefore no reordering of the field values was applied')
+            data_out = data_out_nd
+      
+            
+        #### Step 4: Store the current, temperature and field data in an array to output from the function for general use
         ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
         print('For file:',ppms.filename)
         print(ctf[3],'Currents (uA):',ctf[0]/1e-6)  
@@ -223,67 +270,29 @@ def extract_ctf(PPMS_files, reorder = 'double',  Reduced_temp = False, Reduced_c
         print(ctf[5],'Fields (kOe):',np.round(ctf[2]*10,decimals=0))
         print('Is this correct?')
         
-        ### Step 2: Re-order the main data  aray so that the H fields go in ascending order (data was taken e.g. H = 0, 2, 4, -4, -2, 0 -> -4,-2, 0, 0, 2, 4, 0)
-        if reorder == 'double':
-            # Initialise empty array same shape as data_import_np to store the reordered data
-            data_np_reorder = np.zeros_like(data_import_np)
-            for T in range(ctf[4]):
-                h_1 = int(T*ctf[3]*ctf[5]) #start
-                h_2 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]/2) #middle
-                h_3 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]) #end
-                data_np_reorder[h_1:h_3,:] = np.concatenate((data_import_np[h_2:h_3,:],data_import_np[h_1:h_2,:]), axis = 0)
             
-            # Store the reordered data in the data_out variable
-            data_out = data_np_reorder
+        #### Step 5: Extract the temperature and field values averaged over all the index values and currents to give a better measurement average
         
-        elif reorder == 'single':
-            # Initialise empty array same shape as data_import_np to store the reordered data
-            data_np_reorder = np.zeros_like(data_import_np)
-            for T in range(ctf[4]):
-                h_0 = int(T*ctf[3]*ctf[5]) #first value
-                h_1 = int(T*ctf[3]*ctf[5])+ctf[3] #second value
-                h_2 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]/2) #halfway point
-                h_3 = int(T*ctf[3]*ctf[5]+ctf[3]*ctf[5]) #last value
-                data_np_reorder[h_0:h_3,:] = np.concatenate((data_import_np[h_1:h_2,:],data_import_np[h_0:h_1,:],data_import_np[h_2:h_3,:]), axis = 0)
-            
-            # Store the reordered data in the data_out variable
-            data_out = data_np_reorder
+        # Temperatures and Field values only - dimensions: (temp_no, field_no, current_no, columns, indexes)
+        temp_field_vals = np.copy(data_out[:,:,:,:2,:])
+        # Sum over currents - startingdimensions: (temp_no, field_no, current_no, columns, indexes)
+        current_averaged = np.sum(temp_field_vals, axis=2)/np.shape(temp_field_vals)[2]
+        # Sum over indexes - starting dimensions: (temp_no, field_no, columns, indexes)
+        tf_av = np.sum(current_averaged, axis=3)/np.shape(current_averaged)[3]
+
+
+        #### Step 6: Convert the numpy array to a pandas dataframe for checking values are correct and return the data
         
-        # If reorder is false, return the data as it was imported    
-        else: 
-            data_out = data_import_np
-            
-        #### Step 3: Extract the true temperature and field values averaged over all the index values
-
-        #initialize empty array to store the temp and field values averaged over each set of currents and each index value
-        tf_av = np.zeros((ctf[4]*ctf[5],2,6))
-
-        # slice the data for each current point and sum them, dividing by the total number to get the field and temperature averaged over all the currents
-        for i in range(current_no):
-                    tf_av += data_out[i::current_no,:2,:]/current_no
-        #sum over all the index values and divide by the number of indexes to get average temp and fields for each full set of electrical measurements (index 0-6)
-        tf_av = np.sum(tf_av, axis=2)/np.shape(data_out)[2]
-
-        #### Step 4: Convert the numpy array to a pandas dataframe for checking values are correct and return the data
-        data_out_df = pd.DataFrame(data_out[:,:,2], columns=['Temp (K)', 'Field (T)', 'Source (A)', 'Source (V)', 'Sense (V)'])    
+        # Flatten the data_out array to a 2D array so it can be put into a df for debugging
+        data_out_flat = np.copy(data_out).reshape((ctf[4]*ctf[5]*ctf[3],5,6))
+        data_out_df = pd.DataFrame(data_out_flat[:,:,2], columns=['Temp (K)', 'Field (T)', 'Source (A)', 'Source (V)', 'Sense (V)'])    
         
-        #### Step 5: Store Data in multi dimensional np array of vectors 
-        #### previously: array has (rows, columns, index) dimensions
-        ### new: (temperature (ctf[4]), field(ctf[5]), current (ctf[3]), columns (temp, field, source A, source V, sense V), index(6))
-        # Parameters for reshaping the data
-        colums = 5
-        temps = ctf[4]
-        fields = ctf[5]
-        currents = ctf[3]
-        indexes = 6
-        # Reshape the data
-        data_out_nd = np.reshape(data_out, (temps, fields, currents, colums, indexes))
-
         
-        #### Step 6: Store the data in the PPMSData object
+        
+        #### Step 7: Store the data in the PPMSData object
 
-        ppms.data_np = data_out
-        ppms.data_np_nd = data_out_nd
+        ppms.data_np = data_out_flat
+        ppms.data_np_nd = data_out
         ppms.data_df = data_out_df
         ppms.ctf = ctf
         ppms.tf_av = tf_av
@@ -320,15 +329,16 @@ def Error_Rs(R_sheet,R_32_10, R_20_31):
     
 
 
-def vdp_resistivity(PPMS_files, print_val = False, resistivity_guess = 0):
+def vdp_resistivity(
+    PPMS_files, #list of PPMSData objects
+    print_val = False, # print the initial guess vs calculated resistivity
+    resistivity_guess = 0 #initial guess for the sheet resistivity, if set to 0 then the initial guess is calculated from an approximation with scaling factor
+    ):
     '''Calculates the resistivity of a thin film sample using the Van der Pauw method.
     The measurments for this were done in index values of 2,3,4,5 
     Each index value corresponds to a different configuration of the source and sense leads.
     These 4 index configurations are split into 2 pairs of configurations, with each pair being able to generate the resistivity of the film independantly.
     Four configurations were used for robustness, to enable a comparison of the resistivity values obtained with the source/sense positions swapped.
-    
-    resistivity_guess: is the initial guess for the sheet resistivity, if set to 0 then the initial guess is calculated from an approximation with scaling factor
-    
     '''
     
     for ppms in PPMS_files:
@@ -337,79 +347,84 @@ def vdp_resistivity(PPMS_files, print_val = False, resistivity_guess = 0):
         ctf = ppms.ctf
         tf_av = ppms.tf_av
         data_np = ppms.data_np
+        data_np_nd = ppms.data_np_nd
         
         
         # Initialise a list to store the R^2 value for the IV data and check we have a good fit for the linear regression
         R_squared = []
         
-        # Find the number of measurement points at which the currents were measured (i.e each set of temperature and field values)
-        points_per_index = ctf[4]*ctf[5]
         
-        # Initialize an empty np aray to store each temperature, field, and the resitivities for: config A, config B, average of A and B along with the error
-        res_data = np.zeros((points_per_index, 6))
+        # Initialize an empty np aray with indices: (temp_index, field_index, data_colums) 
+        # storing each temperature, field, and the corresponding resitivities for: config A, config B, average of A and B along with the error
+        res_data = np.zeros((ctf[4],ctf[5], 6))
 
         #Loop over each temperature and field combination, calculating the sheet resistivity using the Van der Pauw method
-        for i in range(points_per_index):
+        for Ti in range(ctf[4]): #for each temperature index
+            for Bi in range(ctf[5]): #for each field index
             
-            # Generate a variable to increment by the number of current points measured for each interation of the loop
-            # thus going to the next measured set of currents each loop
-            increment = i*ctf[3]
-            
-            ##### Using linear regression on the current-voltage data to obtain: 
-            ### R_ij_kl[0] = the slope(resistance), R_ij_kl[1] = intercept, R_ij_kl[2] = R-squared value
+                #ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
+                #(temperature, field, current, columns (temp, field, source A, source V, sense V), index(6))
+                #dat[0].data_np_nd[0,2,3,:,3]
+                
+                ##### Using linear regression on the current-voltage data to obtain: 
+                ### R_ij_kl[0] = the slope(resistance), R_ij_kl[1] = intercept, R_ij_kl[2] = R-squared value
 
-            #First pair of Van der Pauw configurations
-            R_32_10 = linregress(data_np[increment:ctf[3]+increment,2,2], data_np[increment:ctf[3]+increment,4,2])    
-            R_20_31 = linregress(data_np[increment:ctf[3]+increment,2,3], data_np[increment:ctf[3]+increment,4,3])
-            #Second pair of Van der Pauw configurations
-            R_01_23 = linregress(data_np[increment:ctf[3]+increment,2,4], data_np[increment:ctf[3]+increment,4,4])
-            R_13_02 = linregress(data_np[increment:ctf[3]+increment,2,5], data_np[increment:ctf[3]+increment,4,5])
+                #First pair of Van der Pauw configurations
+                R_32_10 = linregress(data_np_nd[Ti,Bi,:,2,2], data_np_nd[Ti,Bi,:,4,2])    
+                R_20_31 = linregress(data_np_nd[Ti,Bi,:,2,3], data_np_nd[Ti,Bi,:,4,3])
+                #Second pair of Van der Pauw configurations
+                R_01_23 = linregress(data_np_nd[Ti,Bi,:,2,4], data_np_nd[Ti,Bi,:,4,4])
+                R_13_02 = linregress(data_np_nd[Ti,Bi,:,2,5], data_np_nd[Ti,Bi,:,4,5])
 
-            # Append the R-squared value to the list
-            R_squared.extend([R_32_10[2], R_20_31[2], R_01_23[2], R_13_02[2]])
-            
-            ### Initial guess for rho_sheet based off an approximate scaling factor from source I, sense V data
-            if resistivity_guess == 0:
-                R_to_rho_scaling =  4 #scaling factor 
-                initial_guess = R_32_10[0]* R_to_rho_scaling 
-            else:
-                # Use the user defined initial guess
-                initial_guess = resistivity_guess
-  
+                # Append the R-squared value to the list
+                R_squared.extend([R_32_10[2], R_20_31[2], R_01_23[2], R_13_02[2]])
+                
+                ### Initial guess for rho_sheet based off an approximate scaling factor from source I, sense V data
+                if resistivity_guess == 0:
+                    R_to_rho_scaling =  4 #scaling factor 
+                    initial_guess = R_32_10[0]* R_to_rho_scaling 
+                else:
+                    # Use the user defined initial guess
+                    initial_guess = resistivity_guess
+    
 
 
-            ##### Solve the Van der Pauw equation for both pairs of configurations
+                ##### Solve the Van der Pauw equation for both pairs of configurations
 
-            # Solve for rho_sheet for the first pair (R_A)
-            R_sheet_A = fsolve(vdp_equation, initial_guess, args=(R_32_10[0], R_20_31[0]))[0]
+                # Solve for rho_sheet for the first pair (R_A)
+                R_sheet_A = fsolve(vdp_equation, initial_guess, args=(R_32_10[0], R_20_31[0]))[0]
 
-            # Solve for rho_sheet for the second pair (R_B)
-            R_sheet_B = fsolve(vdp_equation, initial_guess, args=(R_01_23[0], R_13_02[0]))[0]
-            
-            # Calculate the error in the sheet resistivity for each pair of configurations
-            R_sheet_A_error = Error_Rs(R_sheet_A,R_32_10, R_20_31)
-            R_sheet_B_error = Error_Rs(R_sheet_B,R_01_23, R_13_02)
-            
-            # Solve for isotropic film using parallel R_A
-            #R_sheet_A = fsolve(vdp_equation, initial_guess, args=(R_32_10[0], R_01_23[0]))[0]
+                # Solve for rho_sheet for the second pair (R_B)
+                R_sheet_B = fsolve(vdp_equation, initial_guess, args=(R_01_23[0], R_13_02[0]))[0]
+                
+                # Calculate the error in the sheet resistivity for each pair of configurations
+                R_sheet_A_error = Error_Rs(R_sheet_A,R_32_10, R_20_31)
+                R_sheet_B_error = Error_Rs(R_sheet_B,R_01_23, R_13_02)
+                
+                # Solve for isotropic film using parallel R_A
+                #R_sheet_A = fsolve(vdp_equation, initial_guess, args=(R_32_10[0], R_01_23[0]))[0]
 
-            # Solve for isotropic film using parallel R_B
-            #R_sheet_B = fsolve(vdp_equation, initial_guess, args=(R_20_31[0], R_13_02[0]))[0]
+                # Solve for isotropic film using parallel R_B
+                #R_sheet_B = fsolve(vdp_equation, initial_guess, args=(R_20_31[0], R_13_02[0]))[0]
 
-            # Average the two solutions for the final sheet resistivity
-            R_sheet = (R_sheet_A + R_sheet_B) / 2
-            if print_val == True:
-                print(f'(R_s_Guess, R_s_calc) = ({initial_guess:.1e}, {R_sheet:.1e}) ohm/sq - {ppms.filename}')
-     
-            # Calculate the error in the average sheet resistivity by progating the errors in the individual sheet resistivity values
-            R_sheet_error = 0.5*np.sqrt(R_sheet_A_error**2 + R_sheet_B_error**2)
-            resistivity_error = R_sheet_error*film_thickness # if the film thickness is 1 then this is the error in the sheet resistance
-            
-            
-            # Step 3: Insert the new row to the np data array
-            res_data[i,:] = [tf_av[i,0], tf_av[i,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness, resistivity_error]
+                # Average the two solutions for the final sheet resistivity
+                R_sheet = (R_sheet_A + R_sheet_B) / 2
+                
+                # Option to print the initial guess and the calculated sheet resistivity to check the values are close
+                if print_val == True:
+                    print(f'(R_s_Guess, R_s_calc) = ({initial_guess:.1e}, {R_sheet:.1e}) ohm/sq - {ppms.filename}')
         
-        # Convert the numpy array to a pandas dataframe then return the data in both forms along with the R-squared values
+                # Calculate the error in the average sheet resistivity by progating the errors in the individual sheet resistivity values
+                R_sheet_error = 0.5*np.sqrt(R_sheet_A_error**2 + R_sheet_B_error**2)
+                resistivity_error = R_sheet_error*film_thickness # if the film thickness is 1 then this is the error in the sheet resistance
+                
+                
+                # Step 3: Insert the new row to the np data array using tf_av for temperature and field values that are averaged over all the currents
+                res_data[Ti,Bi,:] = [tf_av[i,0], tf_av[i,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness, resistivity_error]
+          
+        # Flatten the res_data array to a 2D array so it can be put into a df for debugging
+        res_data = res_data.reshape((ctf[4]*ctf[5],6))  
+        # Convert the numpy array to a pandas dataframe 
         res_data_df = pd.DataFrame(res_data, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)', 'rho_error(ohm.m)'])
         
         # Store the data in the PPMSData object
