@@ -26,15 +26,20 @@ class PPMSData:
     hall_coefficient: np.ndarray = None #Hall coefficient data calculated for each temperature: columns = ['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average']
     hall_coefficient_df: pd.DataFrame = None #Hall coefficient data calculated for each temperature in a pandas dataframe
     
-    directory: str = None #directory of the data
+    directory: str = None #directory to save the output files to
     filename: str = None #filename of the data
     film_thickness: float = None  #thickness of the film in meters - set to 1 as default, if set to 1 then you are calculating sheet resistance not resistivity
     material: str = None #material of the film
     plot_str: str = None #strings to be used at the start of the figure file name, including the sample code
-    
 
 
-def import_ppms_data(path, film_thickness = 1.0, material = 'NA', plot_str = 'NA', V_inv = False):
+def import_ppms_data(
+    path, #path to the directory containing the PPMS data
+    film_thickness = 1.0, #thickness of the film in meters - set to 1 as default, if set to 1 then you are calculating sheet resistance not resistivity
+    material = 'NA', #materials of the thin film stack
+    plot_str = 'NA', #strings to be used at the start of the figure file name, including the sample code
+    V_inv = False #invert the sense voltage in case the cables were switched during the measurement (for HC011)
+    ):
     '''
     This function imports the data from the PPMS instrument.
     Note that it converts the field from Oe to Tesla. (strictlys speaking from H to B)
@@ -73,11 +78,9 @@ def import_ppms_data(path, film_thickness = 1.0, material = 'NA', plot_str = 'NA
         ppms_df['index'] = pd.to_numeric(ppms_df['index'], downcast='integer', errors='coerce')
     
         if V_inv == True:
-            # Multiply the 'Sense (V)' column by -1 for only HC011
+            # Multiply the 'Sense (V)' column by -1 for only HC011 as the cables were switched the wrong way around
             ppms_df['Sense (V)'] *= -1
         
-
-
         # Drop rows where all values are NaN (e.g., empty lines)
         ppms_df.dropna(how='all', inplace=True)
 
@@ -99,13 +102,12 @@ def import_ppms_data(path, film_thickness = 1.0, material = 'NA', plot_str = 'NA
         ppms_np = np.array([ndnp[q::6,:-1] for q in range(6)])
         ppms_np = ppms_np.transpose(1,2,0)   
         
-        #Output directory to save plots and PowerPoint to - always defined by the first data set
-        # Replace '/Data/' with '/Output/' in the path
+        ### Define the output directory to save plots and PowerPoint to - always defined by the first data set
         # Ensure the path is a string and replace '/Data/' with '/Output/'
         path_str = str(path)
         path_out_str = path_str.replace('/Data', '/Output')
+        
         # Ensure the path ends with a trailing slash
-
         if not path_out_str.endswith('/'):
             path_out = Path(path_out_str + '/')
             
@@ -144,14 +146,14 @@ def unique_T_values(data_import_np):
     if temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.80].shape[0] >= 1:
         print('tempshape',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8].shape[0])
         print('WARNING Potential Temperature Issues: The erronous temperature points are:',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8])
-        # Remove the erronous temperature points that don't appear frequently enough thus are probably from temperature fluctuations
+        # Remove the erronous temperature points that don't appear frequently enough thus are probably from small temperature fluctuations
         temp_unique = temp_unique[temp_unique_counts >= np.mean(temp_unique_counts)*0.8]
     
     temp_no = temp_unique.shape[0]
     
     return temp_no, temp_unique
 
-def extract_ctf(PPMS_files, reorder = 'double',  Reduced_temp = False, Reduced_current = False):
+def extract_ctf(PPMS_files,  Reduced_temp = False, Reduced_current = False):
     '''extract the number of temperature, field and current points used in the measurements
     Also extract the rounded values of the temperature, field and current used in the measurements
     These rounded values can be displayed to check they are as expected where the true more accurate values are used for the calculations
@@ -221,9 +223,8 @@ def extract_ctf(PPMS_files, reorder = 'double',  Reduced_temp = False, Reduced_c
         #### Step 3: Re-order the extracted field value vector so they are in ascending order from -H max to H max 
 
         # Case for field values that are originally in the order 0->Bmax,-Bmax->0
-        if field_unique[0] == 0 and field_unique[-1] == 0:
+        if np.round(field_unique[0],decimals=0) == 0 and np.round(field_unique[-1],decimals=0) == 0:
             print('double: Field values originally in the order 0->Bmax,-Bmax->0')
-            
             # Re-order the extracted field values vector
             field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[:int(field_no/2)]))
             
@@ -240,9 +241,9 @@ def extract_ctf(PPMS_files, reorder = 'double',  Reduced_temp = False, Reduced_c
             
             
         # Case for field values that are originally in the order 0,-Hmax->Hmax
-        elif field_unique[0] == 0 and field_unique[int(field_no/2)] == 0:
+        elif np.round(field_unique[0],decimals=0) == 0 and np.round(field_unique[int(field_no/2)], decimals=0) == 0:
             print('single: Field values originally in the order 0,-Bmax->0->Bmax')
-            
+
             # Re-order the extracted field values vector
             field_unique = np.concatenate((field_unique[1:int(field_no/2)],np.array([field_unique[0]]),field_unique[int(field_no/2):]))
             
@@ -252,13 +253,14 @@ def extract_ctf(PPMS_files, reorder = 'double',  Reduced_temp = False, Reduced_c
                 start = 0
                 middle = int(field_no/2)
                 end = int(field_no)
-                data_np_nd_reorder = np.concatenate((data_out_nd[:,1:middle,:,:,:], data_out_nd[:,0,:,:,:], data_out_nd[:,middle:end,:,:,:]), axis = 1)
+                data_np_nd_reorder = np.concatenate((data_out_nd[:,1:middle+1,:,:,:], data_out_nd[:,0:1,:,:,:], data_out_nd[:,middle+1:end,:,:,:]), axis = 1)
             
             # Store the reordered data in the data_out variable
             data_out = data_np_nd_reorder
             
         else:
             print('Warning: no recognised field order therefore no reordering of the field values was applied')
+            print('Field values:',field_unique[0],field_unique[-1],field_unique[int(field_no/2)])
             data_out = data_out_nd
       
             
@@ -279,6 +281,7 @@ def extract_ctf(PPMS_files, reorder = 'double',  Reduced_temp = False, Reduced_c
         current_averaged = np.sum(temp_field_vals, axis=2)/np.shape(temp_field_vals)[2]
         # Sum over indexes - starting dimensions: (temp_no, field_no, columns, indexes)
         tf_av = np.sum(current_averaged, axis=3)/np.shape(current_averaged)[3]
+        # Final dimensions for tf_av: (temp_no, field_no, columns (temp, field))
 
 
         #### Step 6: Convert the numpy array to a pandas dataframe for checking values are correct and return the data
@@ -361,13 +364,9 @@ def vdp_resistivity(
         #Loop over each temperature and field combination, calculating the sheet resistivity using the Van der Pauw method
         for Ti in range(ctf[4]): #for each temperature index
             for Bi in range(ctf[5]): #for each field index
-            
-                #ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
-                #(temperature, field, current, columns (temp, field, source A, source V, sense V), index(6))
-                #dat[0].data_np_nd[0,2,3,:,3]
                 
-                ##### Using linear regression on the current-voltage data to obtain: 
-                ### R_ij_kl[0] = the slope(resistance), R_ij_kl[1] = intercept, R_ij_kl[2] = R-squared value
+                ##### Step 1: Using linear regression on the current-voltage data
+                #R_ij_kl[0] = the slope(resistance), R_ij_kl[1] = intercept, R_ij_kl[2] = R-squared value
 
                 #First pair of Van der Pauw configurations
                 R_32_10 = linregress(data_np_nd[Ti,Bi,:,2,2], data_np_nd[Ti,Bi,:,4,2])    
@@ -386,10 +385,8 @@ def vdp_resistivity(
                 else:
                     # Use the user defined initial guess
                     initial_guess = resistivity_guess
-    
 
-
-                ##### Solve the Van der Pauw equation for both pairs of configurations
+                ##### Step 2: solve the Van der Pauw equation for both pairs of configurations
 
                 # Solve for rho_sheet for the first pair (R_A)
                 R_sheet_A = fsolve(vdp_equation, initial_guess, args=(R_32_10[0], R_20_31[0]))[0]
@@ -397,16 +394,20 @@ def vdp_resistivity(
                 # Solve for rho_sheet for the second pair (R_B)
                 R_sheet_B = fsolve(vdp_equation, initial_guess, args=(R_01_23[0], R_13_02[0]))[0]
                 
-                # Calculate the error in the sheet resistivity for each pair of configurations
-                R_sheet_A_error = Error_Rs(R_sheet_A,R_32_10, R_20_31)
-                R_sheet_B_error = Error_Rs(R_sheet_B,R_01_23, R_13_02)
-                
                 # Solve for isotropic film using parallel R_A
                 #R_sheet_A = fsolve(vdp_equation, initial_guess, args=(R_32_10[0], R_01_23[0]))[0]
 
                 # Solve for isotropic film using parallel R_B
                 #R_sheet_B = fsolve(vdp_equation, initial_guess, args=(R_20_31[0], R_13_02[0]))[0]
+                
+                #### Step 3: Calculate the error in the sheet resistivity for each pair of configurations
+                # Calculate the error in the sheet resistivity for each pair of configurations
+                R_sheet_A_error = Error_Rs(R_sheet_A,R_32_10, R_20_31)
+                R_sheet_B_error = Error_Rs(R_sheet_B,R_01_23, R_13_02)
+                
 
+                #### Step 4: Calculate the average sheet resistivity and the error in the average
+                
                 # Average the two solutions for the final sheet resistivity
                 R_sheet = (R_sheet_A + R_sheet_B) / 2
                 
@@ -418,14 +419,13 @@ def vdp_resistivity(
                 R_sheet_error = 0.5*np.sqrt(R_sheet_A_error**2 + R_sheet_B_error**2)
                 resistivity_error = R_sheet_error*film_thickness # if the film thickness is 1 then this is the error in the sheet resistance
                 
-                
-                # Step 3: Insert the new row to the np data array using tf_av for temperature and field values that are averaged over all the currents
-                res_data[Ti,Bi,:] = [tf_av[i,0], tf_av[i,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness, resistivity_error]
+                #### Step 5: Insert the new row to the np data array using tf_av for temperature and field values that are averaged over all the currents
+                res_data[Ti,Bi,:] = [tf_av[Ti,Bi,0], tf_av[Ti,Bi,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness, resistivity_error]
           
         # Flatten the res_data array to a 2D array so it can be put into a df for debugging
-        res_data = res_data.reshape((ctf[4]*ctf[5],6))  
+        res_data_flat = res_data.reshape((ctf[4]*ctf[5],6))  
         # Convert the numpy array to a pandas dataframe 
-        res_data_df = pd.DataFrame(res_data, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)', 'rho_error(ohm.m)'])
+        res_data_df = pd.DataFrame(res_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)', 'rho_error(ohm.m)'])
         
         # Store the data in the PPMSData object
         ppms.res_data = res_data
@@ -444,29 +444,27 @@ def magnetoresistance(PPMS_files, exclude_res = False):
     Outputs the magnetoresistance values for each temperature and field strength.
     Third index stores the magnetoresistance value for rho_A, rho_B, and the average of the two: rho_film to look at any ayssmetries with direction'''
     
-    # Calculate the resistivity of the thin film sample using the Van der Pauw method - hopefully overwriting and not double operating
+    # Calculate the resistivity of the thin film sample using the Van der Pauw method
+    # Option to exclude if the data is being filtered so you don't overwrite the filtered data
     if exclude_res == False:
         PPMS_files = vdp_resistivity(PPMS_files)
+        
     for ppms in PPMS_files:
         # Extract the required data from the PPMSData object
-        film_thickness = ppms.film_thickness
         ctf = ppms.ctf
-        tf_av = ppms.tf_av
-        data_np = ppms.data_np   
-
         res_data = ppms.res_data 
         
-        # Initialize an empty array to store the magnetoresistance data at each temperature (rows) and field strength (columns)
-        # The third index stores the magnetoresistance value for rho_A, rho_B, and the average of the two: rho_film to look at any ayssmetries with direction
+        # Initialize an empty array to store the magnetoresistance data: (temperature, field, data_colums)
+        # data_colums: (rho_A, rho_B, and the average of the two: rho_film) to look at any ayssmetries with direction
         mag_res = np.zeros((ctf[4], ctf[5],3))
         
         # Loop over the temperature and field data extracting the magnetoresistance values
-        for t_count, t in enumerate(ctf[1], start=0):
-            for f_count, f in enumerate(ctf[2], start=0):
+        for Ti in range(ctf[4]):
+            for Bi in range(ctf[5]):
                 # Magnetoresistance = 100*(R(H) - R(0)) / R(0)
-                mag_res[t_count,f_count,:] = 100*(res_data[int(t_count*ctf[5]+f_count),2:5]-res_data[int(t_count*ctf[5]+ctf[5]/2),2:5])/res_data[int(t_count*ctf[5]+ctf[5]/2),2:5]
-                #print(f'For T={t} K and B={f} Oe, magnetoresistance = {mag_res[t_count,f_count]} %')
-        
+                mag_res[Ti,Bi,:] = 100*(res_data[Ti,Bi,2:5]-res_data[Ti,int((ctf[5]/2)-1),2:5])/res_data[Ti,int((ctf[5]/2)-1),2:5]
+                # Using the first zero for both field orders which should have come from the later, more stable measurement
+    
         # Store the magnetoresistance data in the PPMSData object
         ppms.mag_res = mag_res
     return PPMS_files
@@ -486,48 +484,46 @@ def vdp_hall(PPMS_files):
         film_thickness = ppms.film_thickness
         ctf = ppms.ctf
         tf_av = ppms.tf_av
-        data_np = ppms.data_np
+        data_np_nd = ppms.data_np_nd
         
         # Initialize an empty np aray to store the temperature, field, hall resistance: in config A, R^2 for that fit, Hall resistance in  config B, R^2 for that, and Average 
-        hall_data = np.zeros((ctf[4]*ctf[5], 7))
+        hall_data = np.zeros((ctf[4],ctf[5], 7))
         
         # Initialize an empty np array to store the Temperature, Hall coefficient A, R^2 A, Hall Coefficient B, and average Hall coefficients
         hall_coefficient = np.zeros((ctf[4], 11))
 
         #Loop over each temperature using regression on the hall_resistivity-field  data to obtain the Hall coefficient at each temperature
-        for T in range(ctf[4]):
+        for Ti in range(ctf[4]):
             #Loop over each field using regression on the current-voltage data to obtain the Hall resistivity at each field
-            for H in range(ctf[5]):
-            
-                # i is the point number in the data_np array that we are currently at
-                i = H+(T*ctf[5])
-                # Generate a variable to that increments to the next set of current points for each iteration of the loop
-                increment = ctf[3]*i
+            for Bi in range(ctf[5]):
                 
-                ##### Using linear regression on the current-voltage data to obtain: 
-                ### R_ij_kl[0] = the slope(resistance), R_ij_kl[1] = intercept, R_ij_kl[2] = R-squared value
-
-                #Hall Resitance in configuration A
-                #Regression on (x,y) = (I_source, V_measured)
-                R_13_42 = linregress(data_np[increment:ctf[3]+increment,2,0], data_np[increment:ctf[3]+increment,4,0])    
-                #Hall resistance in configuration B (with source and sense leads swapped)
-                R_24_31 = linregress(data_np[increment:ctf[3]+increment,2,1], data_np[increment:ctf[3]+increment,4,1])
+                #### Step 1: Use linear regression on the current-voltage data to obtain the Hall resistivity at each field
+                # R_ij_kl[0] = the slope(resistance), R_ij_kl[1] = intercept, R_ij_kl[2] = R-squared value     
+                
+                # Hall Resitance in configuration A
+                R_13_42 = linregress(data_np_nd[Ti,Bi,:,2,0], data_np_nd[Ti,Bi,:,4,0]) #Regression on (x,y) = (I_source, V_measured) 
+                # Hall resistance in configuration B (with source and sense leads swapped)
+                R_24_31 = linregress(data_np_nd[Ti,Bi,:,2,1], data_np_nd[Ti,Bi,:,4,1]) #Regression on (x,y) = (H_applied, V_measured)
                 
                 # Average the two solutions for the final sheet resistivity
                 R_hall_average = (R_13_42[0] + R_24_31[0]) / 2
                 
-                # Step 3: Insert the new row to the np data array
-                hall_data[i,:] = [tf_av[i,0], tf_av[i,1], R_13_42[0]*film_thickness, R_13_42[2], R_24_31[0]*film_thickness, R_24_31[2], R_hall_average*film_thickness]
+                # Insert the new row to the np data array
+                hall_data[Ti,Bi,:] = [tf_av[Ti,Bi,0], tf_av[Ti,Bi,1], R_13_42[0]*film_thickness, R_13_42[2], R_24_31[0]*film_thickness, R_24_31[2], R_hall_average*film_thickness]
         
                 
-            #Hall Coefficient in configuration A
-            #Regression on (x,y) = (H_applied, V_measured)
-            HC_13_42 = linregress(hall_data[T*ctf[5]:(T+1)*ctf[5],1], hall_data[T*ctf[5]:(T+1)*ctf[5],2])    
+            # Step 2: Calculate the Hall Coefficient
+ 
+            # Hall Coefficient in configuration A
+            HC_13_42 = linregress(hall_data[Ti,:,1], hall_data[Ti,:,2])  #Regression on (x,y) = (H_applied, V_measured)
             #Hall Coefficient in configuration B (with source and sense leads swapped)
-            HC_24_31 = linregress(hall_data[T*ctf[5]:(T+1)*ctf[5],1], hall_data[T*ctf[5]:(T+1)*ctf[5],4])
+            HC_24_31 = linregress(hall_data[Ti,:,1], hall_data[Ti,:,4]) #Regression on (x,y) = (H_applied, V_measured)
+            
             # Hall coefficient average
-            HC_av = linregress(hall_data[T*ctf[5]:(T+1)*ctf[5],1], hall_data[T*ctf[5]:(T+1)*ctf[5],6])
+            HC_av = linregress(hall_data[Ti,:,1], hall_data[Ti,:,6])
             #print('HC_av',HC_av[0])
+            
+            ### Step 3: Calculate the charge carrier density and its corresponding error
             
             #calculate the charge carrier density
             cc_density = 1e-6 * np.divide(1, np.multiply(HC_av[0], scipy.constants.e))
@@ -540,20 +536,30 @@ def vdp_hall(PPMS_files):
             cc_density_error = 1e-6 *np.divide(Hall_error, np.multiply(HC_av[0]**2, scipy.constants.e))
             #print('cc_density:',cc_density,'cc_density_error',cc_density_error)
             
-            ### Calculate the mobility and its corresponding error
-            # Mobility is calculated from the Hall coefficient and the charge carrier density
-            resitivity = ppms.res_data[int(ppms.ctf[5]/2-1)+(T*ppms.ctf[5]),4]
-            resistivity_error = ppms.res_data[int(ppms.ctf[5]/2-1)+(T*ppms.ctf[5]),5]
+            #### Step 4: Calculate the mobility and its corresponding error
+            
+            #extract the resistivity and its error
+            resitivity = ppms.res_data[Ti,int((ctf[5]/2)-1),4]
+            resistivity_error = ppms.res_data[Ti, int((ctf[5]/2)-1), 5]
+        
+            # Mobility is calculated from the Hall coefficient and the zero field resistivity (1e4 to convert to cm^2/Vs)
             mobility = 1e4*np.divide(HC_av[0], resitivity)
+            
             # Error in the mobility is calculated from error propogation (1e4 to convert to cm^2/Vs)
             # u = Rh/rho -> d(mobility) = sqrt((du/dRh *dRh)^2 + (du/drho *drho)^2)
             mobility_error = 1e4*np.sqrt((Hall_error/resitivity)**2 + ((HC_av[0]*resistivity_error)/resitivity**2)**2)
             
-            hall_coefficient[T,:] = [tf_av[i,0], HC_13_42[0], HC_13_42[2], HC_24_31[0],HC_24_31[2],HC_av[0],HC_av[2], cc_density, cc_density_error, mobility, mobility_error]
             
+            # Average the temperatures over all field values to get a measurement average temperature
+            average_temperature = np.sum(tf_av[Ti,:,0], axis=0)/tf_av.shape[1] 
+            
+            hall_coefficient[Ti,:] = [average_temperature, HC_13_42[0], HC_13_42[2], HC_24_31[0],HC_24_31[2],HC_av[0],HC_av[2], cc_density, cc_density_error, mobility, mobility_error]
+            
+        # Flatten the hall_data array to a 2D array so it can be put into a df for debugging
+        hall_data_flat = np.copy(hall_data).reshape((ctf[4]*ctf[5],7))
         
         # Convert the numpy array to a pandas dataframe for the Hall resistivity
-        hall_data_df = pd.DataFrame(hall_data, columns=['Temp (K)', 'Field (T)', 'rho_xy_A(ohm.m)', 'R_squared(I)_A', 'rho_xy_B(ohm.m)','R_squared(I)_B', 'rho_xy_average(ohm.m)'])
+        hall_data_df = pd.DataFrame(hall_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xy_A(ohm.m)', 'R_squared(I)_A', 'rho_xy_B(ohm.m)','R_squared(I)_B', 'rho_xy_average(ohm.m)'])
         
         # Convert the numpy array to a pandas dataframe for the Hall coefficeint
         hall_coefficient_df = pd.DataFrame(hall_coefficient, columns=['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average','R^2(H)_average', 'Charge Carrier Density (cm^-2)', 'Charge Carrier Density Error (cm^-2)', 'Mobility (cm^2/Vs)', 'Mobility Error (cm^2/Vs)'])
