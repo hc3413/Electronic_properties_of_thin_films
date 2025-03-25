@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib import rcParams
+import matplotlib as mpl
 import os
 import datetime
 import pathlib
@@ -21,12 +23,11 @@ from matplotlib.cm import ScalarMappable
 import scipy.signal
 from scipy.stats import zscore
 import scienceplots
+import readline
+from cycler import cycler
+import seaborn as sns
 
 
-# Enable LaTeX for text rendering
-plt.rcParams['text.usetex'] = True
-
-plt.style.use(['science', 'grid'])
 
 
 

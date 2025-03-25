@@ -572,5 +572,13 @@ def vdp_hall(PPMS_files):
         
     return PPMS_files
 
+def update_plot_string(PPMS_files):
+    '''Update the plot_str variable for each file in the tuple.'''
+    for ppms in PPMS_files:
+        new_plot_str = input(f"Enter new plot string for {ppms.filename} (current: {ppms.plot_str}): ")
+        ppms.plot_str = ppms.material + ' - ' + new_plot_str if new_plot_str else ppms.plot_str
+        print(f"New plot string for {ppms.filename}: {ppms.plot_str}")
+    return PPMS_files
+
 
 
