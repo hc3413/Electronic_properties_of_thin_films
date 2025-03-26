@@ -11,8 +11,10 @@ def set_plot_style(fig_size, use_tex=True):
         Whether to use LaTeX for rendering text (default: True)
     """
     # Use a colorblind-friendly colormap with at least 10 distinct colors
-    cmap_colors = sns.color_palette("colorblind", 10)
+    cmap_colors =   sns.color_palette("colorblind", 12) #sns.color_palette("bright", 10)
     color_cycler = cycler('color', cmap_colors)
+    color_cycler_2 = cycler('color', ['#0C5DA5', '#00B945', '#FF9500', 
+                                           '#FF2C00', '#845B97', '#474747', '#9e9e9e'])
     
     # Science style settings
     plt.rcParams.update({
@@ -35,18 +37,20 @@ def set_plot_style(fig_size, use_tex=True):
         
         # Axes settings
         'axes.linewidth': 0.5,
-        'axes.prop_cycle': cycler('color', ['#0C5DA5', '#00B945', '#FF9500', 
-                                           '#FF2C00', '#845B97', '#474747', '#9e9e9e']),
+        'axes.prop_cycle': color_cycler ,
         
         # Grid settings
         'grid.linewidth': 0.5,
+        'axes.grid': True,
         
         # Legend settings
         'legend.frameon': False,
         
         # Line settings
         'lines.linewidth': 1.0,
-        'lines.markersize': 5.0,
+        'lines.markersize': 4.0,
+        # Errorbar settings
+        'errorbar.capsize': 0,
         
         # Tick settings
         'xtick.direction': 'in',
@@ -72,7 +76,7 @@ def set_plot_style(fig_size, use_tex=True):
     return
 
 
-def add_colorbar(fig, ax, sm, min_field, max_field):
+def add_colorbar(fig, ax, sm, min_val, max_val, fig_size, field = True):
     """
     Add and adjust a colorbar to the given axis.
     
@@ -82,18 +86,41 @@ def add_colorbar(fig, ax, sm, min_field, max_field):
     - sm: The ScalarMappable object for the colorbar.
     - min_field: The minimum value for the colorbar ticks.
     - max_field: The maximum value for the colorbar ticks.
+    - fig_size: The size of the figure.
+    - field: Whether the colorbar represents a magnetic field (True) or temperature (False).
     """
     cax = fig.add_subplot(ax)  # Use the provided axis for the colorbar
     cbar = plt.colorbar(sm, cax=cax)
-    cbar.set_ticks([min_field, max_field])
-    cbar.set_ticklabels([f'{min_field:.1f} T', f'{max_field:.1f} T'])
+    cbar.set_ticks([min_val, max_val])
+    
+    if field:
+        cbar.set_ticklabels([f'{min_val:.1f} T', f'{max_val:.1f} T']) # Field
+    else:
+        cbar.set_ticklabels([f'{min_val:.1f} K', f'{max_val:.1f} K']) # Temperature
+   
     cbar.minorticks_off()  # Remove minor ticks
     cbar.outline.set_linewidth(0.5)
 
-    # Adjust colorbar position and size
-    cax.set_position([
-        cax.get_position().x0 + 0.02,
-        cax.get_position().y0 + 0.1,
-        cax.get_position().width * 0.3,
-        cax.get_position().height * 0.8
-    ])
+    # Adjust colorbar position and size based on figure size
+    if fig_size == [3.5, 2.625]:
+        height_scale = 0.8
+        pos = cax.get_position()
+        new_height = pos.height * height_scale
+        new_y0 = pos.y0 + (pos.height - new_height) / 2  # Center the colorbar vertically
+        cax.set_position([
+            pos.x0 + 0.03,  # Adjust x0 to move the colorbar to the right
+            new_y0,  # Center the colorbar vertically
+            pos.width * 0.3,  # Adjust width to shrink the colorbar
+            new_height  # Adjust height to shrink the colorbar
+        ])
+    else:
+        height_scale = 0.8
+        pos = cax.get_position()
+        new_height = pos.height * height_scale
+        new_y0 = pos.y0 + (pos.height - new_height) / 2  # Center the colorbar vertically
+        cax.set_position([
+            pos.x0 + 0.03,  # Adjust x0 to move the colorbar to the right
+            new_y0,  # Center the colorbar vertically
+            pos.width * 0.3,  # Adjust width to shrink the colorbar
+            new_height  # Adjust height to shrink the colorbar
+        ])
