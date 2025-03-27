@@ -2,7 +2,7 @@
 from import_dep import *
 
 
-def set_plot_style(plot_data = False, powerpoint_data = False, use_tex=True):
+def set_plot_style(export_data = False, powerpoint_data = False, use_tex=True):
     """
     Set publication-quality plot styles.
     
@@ -13,7 +13,7 @@ def set_plot_style(plot_data = False, powerpoint_data = False, use_tex=True):
     """
     
     # Set the figure size based on whether we are visualising or exporting the data
-    if plot_data == True or powerpoint_data == True:
+    if export_data == True:
         fig_size = [3.5, 2.625] # Publication ready sizes
     else:
         fig_size = [9, 6] # Better for visualisation
