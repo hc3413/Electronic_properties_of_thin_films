@@ -1,125 +1,6 @@
 #import all the libraries needed
 from import_dep import *
-
-# Define a class to store the VNA data alongside its ascociated with the filename, device index, state and DC resistance
-@dataclass
-class PPMSData:
-    data_import_np: np.ndarray = None #raw data from the PPMS instrument
-    data_import_df: pd.DataFrame = None #data from the PPMS instrument in a pandas dataframe
-    
-    data_np: np.ndarray = None #PPMS data sliced and reordered for analysis
-    data_np_nd: np.ndarray = None #PPMS data sliced into a multi-dimensional numpy array with the dimensions (temperature, field, current, columns, index)
-    data_df: pd.DataFrame = None #PPMS data sliced and reordered for analysis in a pandas dataframe
-    
-    ctf: list = None # Storing extract values from data [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
-    
-    tf_av: np.ndarray = None #average temperature and field values as measured during each set of current measurements
-    
-    res_data: np.ndarray = None #resistivity data calculated using the Van der Pauw method: columns = ['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)']
-    res_data_df: pd.DataFrame = None #resistivity data calculated using the Van der Pauw method in a pandas dataframe
-    R_squared_res: list = None #R-squared values for the linear regression of the IV data
-    
-    mag_res: np.ndarray = None #magnetoresistance data calculated for each temperature and field strength
-    
-    hall_data: np.ndarray = None #Hall resistivity data calculated for each temperature and field strength: columns = ['Temp (K)', 'Field (T)', 'rho_xy_A(ohm.m)', 'R_squared(I)_A', 'rho_xy_B(ohm.m)','R_squared(I)_B', 'rho_xy_average(ohm.m)']
-    hall_data_df: pd.DataFrame = None #Hall resistivity data calculated for each temperature and field strength in a pandas dataframe
-    hall_coefficient: np.ndarray = None #Hall coefficient data calculated for each temperature: columns = ['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average']
-    hall_coefficient_df: pd.DataFrame = None #Hall coefficient data calculated for each temperature in a pandas dataframe
-    
-    directory: str = None #directory to save the output files to
-    filename: str = None #filename of the data
-    film_thickness: float = None  #thickness of the film in meters - set to 1 as default, if set to 1 then you are calculating sheet resistance not resistivity
-    material: str = None #material of the film
-    plot_str: str = None #strings to be used at the start of the figure file name, including the sample code
-
-
-def import_ppms_data(
-    path, #path to the directory containing the PPMS data
-    film_thickness = 1.0, #thickness of the film in meters - set to 1 as default, if set to 1 then you are calculating sheet resistance not resistivity
-    material = 'NA', #materials of the thin film stack
-    plot_str = 'NA', #strings to be used at the start of the figure file name, including the sample code
-    V_inv = False #invert the sense voltage in case the cables were switched during the measurement (for HC011)
-    ):
-    '''
-    This function imports the data from the PPMS instrument.
-    Note that it converts the field from Oe to Tesla. (strictlys speaking from H to B)
-    '''
-    PPMS_files = []
-    # Get a list of all the files in the directory converting them to Path objects
-    files = [Path(f) for f in os.listdir(path)]
-    # Sort the files alphabetically
-    files.sort()
-    # Loop over all files in the directory extracting the data as a df, converting it to a numpy array, and slicing it to separete index values into a third dimension
-    for count, fi in enumerate(files):  
-                    
-        # Import the file, treating lines with non-numeric data as comments
-        try:
-            ppms_df = pd.read_csv(path.joinpath(fi), sep='\t', skiprows=6, header=None, comment='N')
-        except Exception as e:
-            print(f"Error with file: {fi}, {e}")
-            continue
-
-        # Drop unwanted columns
-        try:
-            ppms_df.drop(ppms_df.columns[[6, 7]], axis=1, inplace=True)
-        except Exception as e:
-            print(f"Error with file: {fi}, {e}")
-            continue
-
-        # Assign headers to columns
-        ppms_df.columns = ['Temp (K)', 'Field', 'Source (A)', 'Source (V)', 'Sense (V)', 'index']
-
-        # Convert columns to the appropriate data types
-        ppms_df['Temp (K)'] = pd.to_numeric(ppms_df['Temp (K)'], errors='coerce')
-        ppms_df['Field'] = pd.to_numeric(ppms_df['Field'], errors='coerce')
-        ppms_df['Source (A)'] = pd.to_numeric(ppms_df['Source (A)'], errors='coerce')
-        ppms_df['Source (V)'] = pd.to_numeric(ppms_df['Source (V)'], errors='coerce')
-        ppms_df['Sense (V)'] = pd.to_numeric(ppms_df['Sense (V)'], errors='coerce')
-        ppms_df['index'] = pd.to_numeric(ppms_df['index'], downcast='integer', errors='coerce')
-    
-        if V_inv == True:
-            # Multiply the 'Sense (V)' column by -1 for only HC011 as the cables were switched the wrong way around
-            ppms_df['Sense (V)'] *= -1
-        
-        # Drop rows where all values are NaN (e.g., empty lines)
-        ppms_df.dropna(how='all', inplace=True)
-
-        # Convert the 'index' column to integer format
-        ppms_df['index'] = ppms_df['index'].astype(int)
-        
-        # Convert the field from Oe to Tesla
-        ppms_df['Field'] = ppms_df['Field'] / 10000
-
-        # Change the header to 'Field (T)'
-        ppms_df.rename(columns={'Field': 'Field (T)'}, inplace=True)
-
-        # Convert the data frame to a numpy array
-        ndnp = ppms_df.to_numpy()
-
-        # Slice the array taking every 6th value (i.e the different index values) 
-        # then stack these 2d arrays to generate a 3d array
-        # The new array has (rows, columns, index) dimensions
-        ppms_np = np.array([ndnp[q::6,:-1] for q in range(6)])
-        ppms_np = ppms_np.transpose(1,2,0)   
-        
-        ### Define the output directory to save plots and PowerPoint to - always defined by the first data set
-        # Ensure the path is a string and replace '/Data/' with '/Output/'
-        path_str = str(path)
-        path_out_str = path_str.replace('/Data', '/Output')
-        
-        # Ensure the path ends with a trailing slash
-        if not path_out_str.endswith('/'):
-            path_out = Path(path_out_str + '/')
-            
-        # Convert back to Path object
-        path_out = Path(path_out_str)
-        
-        # Store the extracted data into a list of PPMSData objects
-        PPMS_files.append(PPMSData(data_import_np = ppms_np, data_import_df = ppms_df, filename = fi, film_thickness = film_thickness, material = material, directory = path_out, plot_str = plot_str))
-        
-        # Print the filenames of the imported data to check they are correct along with the shape of the numpy array
-        print(f'File {count+1} imported: {fi} with shape {ppms_np.shape}')
-    return PPMS_files
+from data_import import *
 
 def round_to_sf(x, p):
     '''Rounds a number to a specified number of significant figures'''
@@ -153,16 +34,14 @@ def unique_T_values(data_import_np):
     
     return temp_no, temp_unique
 
-def extract_ctf(PPMS_files,  Reduced_temp = False, Reduced_current = False):
+def extract_ctf(PPMS_files,  Reduced_temp = False, Reduced_current = False, ohm_m = False):
     '''extract the number of temperature, field and current points used in the measurements
     Also extract the rounded values of the temperature, field and current used in the measurements
     These rounded values can be displayed to check they are as expected where the true more accurate values are used for the calculations
     tf_av are the true, meausured average temperature and field values used for each set of current measurements
     Reduced_temp = [3,-1] will skip the first 3 temperature points and the last 1 temperature point
     Reduced_current = 2 will skip the first 2 current points and the last 2 current points
-    Re-order rearranges the field values so they are in ascending order from -H max to H max
-        double: for data originally from 0->Bmax->-Bmax->0
-        single: for data originally from 0->-Bmax->0->Bmax
+
     '''
     
     for ppms in PPMS_files:
@@ -299,8 +178,21 @@ def extract_ctf(PPMS_files,  Reduced_temp = False, Reduced_current = False):
         ppms.data_df = data_out_df
         ppms.ctf = ctf
         ppms.tf_av = tf_av
+        
+        #### Step 8: Scaling factor to output to plots for sheet resistance or resistivity
+        # By default all data is handled in ohm-m
+        if PPMS_files[0].film_thickness == 1: # In case of 2DEG, you need sheet resistance 
+            # No scaling for sheet resistance
+            unit_scale = 1
+            
+        elif ohm_m == 1: #specific case to force resistivity to be in ohm-m
+            unit_scale = 1
+            
+        else:
+            # Convert resistivity from ohm-m to micro-ohm cm for better readability
+            unit_scale = 1e8
     
-    return PPMS_files
+    return PPMS_files, unit_scale
 
     
 
@@ -335,7 +227,10 @@ def Error_Rs(R_sheet,R_32_10, R_20_31):
 def vdp_resistivity(
     PPMS_files, #list of PPMSData objects
     print_val = False, # print the initial guess vs calculated resistivity
-    resistivity_guess = 0 #initial guess for the sheet resistivity, if set to 0 then the initial guess is calculated from an approximation with scaling factor
+    resistivity_guess = 0, #initial guess for the sheet resistivity, if set to 0 then the initial guess is calculated from an approximation with scaling factor
+    filt_kern = 0, # median filter kernel size, if set to 0 then no filter is applied
+    filt_sigma = 0, # gaussian filter sigma, if set to 0 then no filter is applied
+    threshold = 0 # z-score threshold for outlier detection, if set to 0 then no filter is applied, (lower threshold means more points are considered outliers (2 is typical value))
     ):
     '''Calculates the resistivity of a thin film sample using the Van der Pauw method.
     The measurments for this were done in index values of 2,3,4,5 
@@ -421,7 +316,12 @@ def vdp_resistivity(
                 
                 #### Step 5: Insert the new row to the np data array using tf_av for temperature and field values that are averaged over all the currents
                 res_data[Ti,Bi,:] = [tf_av[Ti,Bi,0], tf_av[Ti,Bi,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness, resistivity_error]
-          
+
+            # Option to filter the resistivity vs field data
+            if filt_kern != 0 or filt_sigma != 0 or threshold != 0:
+                res_data[Ti,:,4] = filter_data(res_data[Ti,:,4], filt_kern, filt_sigma, threshold)
+            
+            
         # Flatten the res_data array to a 2D array so it can be put into a df for debugging
         res_data_flat = res_data.reshape((ctf[4]*ctf[5],6))  
         # Convert the numpy array to a pandas dataframe 
@@ -471,7 +371,12 @@ def magnetoresistance(PPMS_files, exclude_res = False):
 
 
 
-def vdp_hall(PPMS_files):
+def vdp_hall(
+    PPMS_files, # list of PPMSData objects
+    filt_kern = 0, # median filter kernel size, if set to 0 then no filter is applied
+    filt_sigma = 0, # gaussian filter sigma, if set to 0 then no filter is applied
+    threshold = 0 # z-score threshold for outlier detection, if set to 0 then no filter is applied, (lower threshold means more points are considered outliers (2 is typical value))             
+    ):
     '''Calculates the Hall resistivity at every temperature and field strength
     Uses linear regression on the current-voltage data to obtain the Hall resistivity
     The Hall resistivity is calculated for each configuration of the source and sense leads and the two are averaged
@@ -510,7 +415,11 @@ def vdp_hall(PPMS_files):
                 
                 # Insert the new row to the np data array
                 hall_data[Ti,Bi,:] = [tf_av[Ti,Bi,0], tf_av[Ti,Bi,1], R_13_42[0]*film_thickness, R_13_42[2], R_24_31[0]*film_thickness, R_24_31[2], R_hall_average*film_thickness]
-        
+
+            # Option to filter Data Hall resistivity vs field
+            if filt_kern != 0 or filt_sigma != 0 or threshold != 0:
+                hall_data[Ti,:,6] = filter_data(hall_data[Ti,:,6], filt_kern, filt_sigma, threshold)
+            
                 
             # Step 2: Calculate the Hall Coefficient
  
@@ -581,4 +490,38 @@ def update_plot_string(PPMS_files):
     return PPMS_files
 
 
+def filter_data(raw_data, filt_kern = 0, filt_sigma = 0, threshold = 0):
+    '''Filter the data using:
+    Median filter 
+    Gaussian smoothing filter 
+    Z-score outlier detection
+    
+    filter is applied within the loops of the data processing functions so only applies 
+    to a set of IV meausurements at different fields but a single temperature
+    
+    '''
+    
+    # Median Filter 
+    if filt_kern != 0:
+        dat_filtered = scipy.signal.medfilt(raw_data, kernel_size=filt_kern)
+        return dat_filtered
+        
+    # Gaussian Smoothing Filter
+    if filt_sigma != 0:
+        dat_smoothed = scipy.ndimage.gaussian_filter1d(raw_data, sigma=filt_sigma)
+        return dat_smoothed
+    
+    # Z-score outlier detection 
+    if threshold != 0:
+        # Calculate the Z-scores of the data
+        z_scores = zscore(raw_data)
+        
+        # Identify outliers
+        outliers = np.abs(z_scores) > threshold
+        
+        # Replace outliers with interpolated values
+        dat_filtered = raw_data.copy()
+        dat_filtered[outliers] = np.interp(np.flatnonzero(outliers), np.flatnonzero(~outliers), raw_data[~outliers])    
+        return dat_filtered
 
+    
