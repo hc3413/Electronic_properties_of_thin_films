@@ -34,13 +34,20 @@ def unique_T_values(data_import_np):
     
     return temp_no, temp_unique
 
-def extract_ctf(PPMS_files,  Reduced_temp = False, Reduced_current = False, ohm_m = False):
+def extract_ctf(
+    PPMS_files,  
+    Reduced_temp = False,  #Reduced_temp = [3,-1] will skip the first 3 temperature points and the last 1 temperature point
+    Reduced_current = False,  #Reduced_current = 2 will skip the first 2 current points and the last 2 current points
+    ohm_m = False, # parameter to be passed in to force the unit scaling for plots to be in ohm-m instead of u-ohm cm
+    single_zero_field = False, # Removes the first zero field point from the data thus giving a single zero field point for final plotting
+    
+    ):
     '''extract the number of temperature, field and current points used in the measurements
     Also extract the rounded values of the temperature, field and current used in the measurements
     These rounded values can be displayed to check they are as expected where the true more accurate values are used for the calculations
     tf_av are the true, meausured average temperature and field values used for each set of current measurements
-    Reduced_temp = [3,-1] will skip the first 3 temperature points and the last 1 temperature point
-    Reduced_current = 2 will skip the first 2 current points and the last 2 current points
+   
+    
 
     '''
     
@@ -104,16 +111,25 @@ def extract_ctf(PPMS_files,  Reduced_temp = False, Reduced_current = False, ohm_
         # Case for field values that are originally in the order 0->Bmax,-Bmax->0
         if np.round(field_unique[0],decimals=0) == 0 and np.round(field_unique[-1],decimals=0) == 0:
             print('double: Field values originally in the order 0->Bmax,-Bmax->0')
+            
             # Re-order the extracted field values vector
-            field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[:int(field_no/2)]))
+            if single_zero_field == True:
+                # Keep only the final zero field point
+                field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[1:int(field_no/2)]))
+            else:
+                # Keep both zero field points
+                field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[:int(field_no/2)]))
             
             # Re-order the main data array to have the field values in the order -Hmax->Hmax
-            data_np_nd_reorder = np.zeros_like(data_out_nd)
             for T in range(temp_no):
                 start = 0
                 middle = int(field_no/2)
                 end = int(field_no)
-                data_np_nd_reorder = np.concatenate((data_out_nd[:,middle:end,:,:,:],data_out_nd[:,start:middle,:,:,:]), axis = 1)
+                
+                if single_zero_field == True:
+                    data_np_nd_reorder = np.concatenate((data_out_nd[:,middle:end,:,:,:],data_out_nd[:,start+1:middle,:,:,:]), axis = 1)
+                else:
+                    data_np_nd_reorder = np.concatenate((data_out_nd[:,middle:end,:,:,:],data_out_nd[:,start:middle,:,:,:]), axis = 1)
             
             # Store the reordered data in the data_out variable
             data_out = data_np_nd_reorder
@@ -124,15 +140,25 @@ def extract_ctf(PPMS_files,  Reduced_temp = False, Reduced_current = False, ohm_
             print('single: Field values originally in the order 0,-Bmax->0->Bmax')
 
             # Re-order the extracted field values vector
-            field_unique = np.concatenate((field_unique[1:int(field_no/2)],np.array([field_unique[0]]),field_unique[int(field_no/2):]))
+            if single_zero_field == True:
+                # Keep only the final zero field point
+                field_unique = np.concatenate((field_unique[1:int(field_no/2)],field_unique[int(field_no/2):]))
+            else:
+                # Keep both zero field points
+                field_unique = np.concatenate((field_unique[1:int(field_no/2)],np.array([field_unique[0]]),field_unique[int(field_no/2):]))
             
             # Re-order the main data array to have the field values in the order -Hmax->Hmax
-            data_np_nd_reorder = np.zeros_like(data_out_nd)
             for T in range(temp_no):
                 start = 0
                 middle = int(field_no/2)
                 end = int(field_no)
-                data_np_nd_reorder = np.concatenate((data_out_nd[:,1:middle+1,:,:,:], data_out_nd[:,0:1,:,:,:], data_out_nd[:,middle+1:end,:,:,:]), axis = 1)
+                
+                if single_zero_field == True:
+                    # Keep only the final zero field point
+                    data_np_nd_reorder = np.concatenate((data_out_nd[:,1:middle+1,:,:,:], data_out_nd[:,middle+1:end,:,:,:]), axis = 1)
+                else:
+                    # Keep both zero field points
+                    data_np_nd_reorder = np.concatenate((data_out_nd[:,1:middle+1,:,:,:], data_out_nd[:,0:1,:,:,:], data_out_nd[:,middle+1:end,:,:,:]), axis = 1)
             
             # Store the reordered data in the data_out variable
             data_out = data_np_nd_reorder
@@ -142,6 +168,9 @@ def extract_ctf(PPMS_files,  Reduced_temp = False, Reduced_current = False, ohm_
             print('Field values:',field_unique[0],field_unique[-1],field_unique[int(field_no/2)])
             data_out = data_out_nd
       
+        # After all the re-shaping is done (using field_no) recalculate the number of unique field points
+        if single_zero_field == True:
+            field_no = np.shape(field_unique)[0]
             
         #### Step 4: Store the current, temperature and field data in an array to output from the function for general use
         ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
@@ -339,36 +368,65 @@ def vdp_resistivity(
 
 
 
-def magnetoresistance(PPMS_files, exclude_res = False):
-    '''Calculates the magnetoresistance of a thin film sample using the Van der Pauw method.
+#### Suggested changes to VDP_functions.py
+# filepath: /Users/horatiocox/Desktop/Electronic_properties_of_thin_films/VDP_functions.py
+
+def magnetoresistance(PPMS_files, exclude_res=False):
+    '''
+    Calculates the magnetoresistance of a thin film sample using the Van der Pauw method.
     Outputs the magnetoresistance values for each temperature and field strength.
-    Third index stores the magnetoresistance value for rho_A, rho_B, and the average of the two: rho_film to look at any ayssmetries with direction'''
-    
-    # Calculate the resistivity of the thin film sample using the Van der Pauw method
-    # Option to exclude if the data is being filtered so you don't overwrite the filtered data
+    Now includes an extra column for the magnetoresistance error of the average (ρ_film).
+    '''
     if exclude_res == False:
         PPMS_files = vdp_resistivity(PPMS_files)
         
     for ppms in PPMS_files:
-        # Extract the required data from the PPMSData object
         ctf = ppms.ctf
         res_data = ppms.res_data 
+       
+        # Shape (ctf[4], ctf[5], 4) (temperature, field, columns)
+        # Columns: MR_A, MR_B, MR_avg, MR_avg_error
+        mag_res = np.zeros((ctf[4], ctf[5], 4))
         
-        # Initialize an empty array to store the magnetoresistance data: (temperature, field, data_colums)
-        # data_colums: (rho_A, rho_B, and the average of the two: rho_film) to look at any ayssmetries with direction
-        mag_res = np.zeros((ctf[4], ctf[5],3))
-        
-        # Loop over the temperature and field data extracting the magnetoresistance values
+        zero_field_index = int(ctf[5] / 2)  # Middle (zero) index
+
         for Ti in range(ctf[4]):
             for Bi in range(ctf[5]):
-                # Magnetoresistance = 100*(R(H) - R(0)) / R(0)
-                mag_res[Ti,Bi,:] = 100*(res_data[Ti,Bi,2:5]-res_data[Ti,int((ctf[5]/2)-1),2:5])/res_data[Ti,int((ctf[5]/2)-1),2:5]
-                # Using the first zero for both field orders which should have come from the later, more stable measurement
-    
-        # Store the magnetoresistance data in the PPMSData object
-        ppms.mag_res = mag_res
-    return PPMS_files
+                # R0 for average & its error (at zero field)
+                r0 = res_data[Ti, zero_field_index, 4]
+                e0 = res_data[Ti, zero_field_index, 5]
+                
+                # R(H) for average & its error
+                rh = res_data[Ti, Bi, 4]
+                eh = res_data[Ti, Bi, 5]
+                
+                # MR for ρ_A, ρ_B, and ρ_average
+                # A
+                mag_res[Ti, Bi, 0] = 100 * (
+                    (res_data[Ti, Bi, 2] - res_data[Ti, zero_field_index, 2])
+                    / res_data[Ti, zero_field_index, 2]
+                )
+                # B
+                mag_res[Ti, Bi, 1] = 100 * (
+                    (res_data[Ti, Bi, 3] - res_data[Ti, zero_field_index, 3])
+                    / res_data[Ti, zero_field_index, 3]
+                )
+                # Average
+                mag_res[Ti, Bi, 2] = 100 * (rh - r0) / r0
 
+                # Error propagation for MR_avg:
+                # MR(H) = 100 * (rh - r0) / r0
+                # partial wrt rh = 100 / r0
+                # partial wrt r0 = -100 * rh / r0^2
+                dMR_drh = 100.0 / r0
+                dMR_dr0 = -100.0 * rh / (r0**2)
+                mr_error = np.sqrt((dMR_drh * eh)**2 + (dMR_dr0 * e0)**2)
+
+                mag_res[Ti, Bi, 3] = mr_error
+
+        ppms.mag_res = mag_res
+
+    return PPMS_files
 
 
 def vdp_hall(
@@ -448,8 +506,8 @@ def vdp_hall(
             #### Step 4: Calculate the mobility and its corresponding error
             
             #extract the resistivity and its error
-            resitivity = ppms.res_data[Ti,int((ctf[5]/2)-1),4]
-            resistivity_error = ppms.res_data[Ti, int((ctf[5]/2)-1), 5]
+            resitivity = ppms.res_data[Ti,int(ctf[5]/2),4]
+            resistivity_error = ppms.res_data[Ti, int(ctf[5]/2), 5]
         
             # Mobility is calculated from the Hall coefficient and the zero field resistivity (1e4 to convert to cm^2/Vs)
             mobility = 1e4*np.divide(HC_av[0], resitivity)

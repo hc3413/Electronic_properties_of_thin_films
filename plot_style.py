@@ -38,7 +38,7 @@ def set_plot_style(export_data = False, powerpoint_data = False, use_tex=True):
         'axes.titlesize': 10,
         'xtick.labelsize': 8,
         'ytick.labelsize': 8,
-        'legend.fontsize': 8,
+        'legend.fontsize': 7,
         'mathtext.fontset': 'dejavuserif',
         'text.usetex': use_tex,
         'text.latex.preamble': r'\usepackage{amsmath} \usepackage{amssymb}',
@@ -50,9 +50,11 @@ def set_plot_style(export_data = False, powerpoint_data = False, use_tex=True):
         # Grid settings
         'grid.linewidth': 0.5,
         'axes.grid': True,
+        'axes.axisbelow': True,
         
         # Legend settings
-        'legend.frameon': False,
+        'legend.frameon': True,
+        'legend.framealpha': 0.4,
         
         # Line settings
         'lines.linewidth': 1.0,
@@ -184,7 +186,7 @@ def generate_colormaps_and_normalizers(dat):
     cmap_field = plt.get_cmap('coolwarm')
     
     # Generate a list of markers for the data
-    mark_p = [ 'x','+', '*', '^', 'v', '<', '>', 'p', 'P', 'o', 'h', 'H', 'X', 'd', 'D', '|', '_', '1', '2', '3', '4', '8', 's', 'p', 'P', 'o', 'h', 'H', 'X', 'd', 'D', '|', '_', '1', '2', '3', '4', '8', 's']
+    mark_p = [ 'x', 'o', '*', 'd', '^', 'v','+',  '<', '>', 'p', 'P', 'h', 'H', 'X', 'D', '|', '_', '1', '2', '3', '4', '8', 's', 'p', 'P', 'o', 'h', 'H', 'X', 'd', 'D', '|', '_', '1', '2', '3', '4', '8', 's']
 
    
 
