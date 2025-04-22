@@ -46,17 +46,14 @@ def extract_ctf(
     '''extract the number of temperature, field and current points used in the measurements
     Also extract the rounded values of the temperature, field and current used in the measurements
     These rounded values can be displayed to check they are as expected where the true more accurate values are used for the calculations
-    tf_av are the true, meausured average temperature and field values used for each set of current measurements
-   
-    
-
+    tf_av are the true, measured average temperature and field values used for each set of current measurements
+    Reshapes the data into a multi-dimensional numpy array: (temperature, field, current, columns, index)
     '''
     
     for ppms in PPMS_files:
         data_import_np = ppms.data_import_np
+        measurement_type = ppms.measurement_type # Get measurement type from the object
     
-        #### Step 1: Extract the rounded Current, Temperature, and Field values used from the data
-
         # Find the rounded values of current used and the number of unique current points
         current_round = round_to_sf(data_import_np[:,2,0],2) #round to 2 significant figures
         current_unique = np.unique(current_round) #find the unique values
@@ -90,92 +87,138 @@ def extract_ctf(
         field_unique = data_import_np[0:current_no*field_no:current_no,1,0]
 
         if Reduced_temp != False:
-            data_import_np = data_import_np[Reduced_temp[0]*current_no*field_no:(temp_no + Reduced_temp[1])*current_no*field_no,:,:]
+            # Ensure slicing indices are valid
+            start_idx = Reduced_temp[0] * current_no * field_no
+            end_idx = (temp_no + Reduced_temp[1]) * current_no * field_no
             
-            # Repeat the extraction of the unique temperature values and the number of unique temperature points for the new data
-            [temp_no, temp_unique] = unique_T_values(data_import_np)
+            # Adjust end_idx if it's negative or exceeds bounds
+            if Reduced_temp[1] < 0:
+                 end_idx = data_import_np.shape[0] + Reduced_temp[1] * current_no * field_no
+            
+            # Ensure start_idx is not greater than end_idx
+            if start_idx >= end_idx or start_idx < 0 or end_idx > data_import_np.shape[0]:
+                 print(f"Warning: Invalid Reduced_temp indices {Reduced_temp} for file {ppms.filename}. Skipping temperature reduction.")
+            else:
+                 data_import_np = data_import_np[start_idx:end_idx,:,:]
+                 # Repeat the extraction of the unique temperature values and the number of unique temperature points for the new data
+                 [temp_no, temp_unique] = unique_T_values(data_import_np)
     
 
         
-        #### Step 2: Re-order and store  the data in multi dimensional np array of data vectors (temp, field, source A, source V, sense V)
+        #### Step 2: Re-order and store the data in multi dimensional np array of data vectors (temp, field, source A, source V, sense V)
         # previously: array has (rows, columns, index) dimensions
-        # new: (temperature (ctf[4]), field(ctf[5]), current (ctf[3]), columns (temp, field, source A, source V, sense V), index(6))
+        # new: (temperature (ctf[4]), field(ctf[5]), current (ctf[3]), columns (temp, field, source A, source V, sense V), index(number of measurement configurations))
         # Parameters for reshaping the data
-        columns = no_of_columns
-        indexes = 6 if ppms.measurement_type == 'VDP' else 4 # 6 for VDP, 4 for Hall
+        columns = no_of_columns # Should be 5: Temp, Field, Source I, Source V, Sense V
         
-        # Reshape the data to: (temperature, field, current, columns (temp, field, source A, source V, sense V), index(6/4))
-        data_out_nd = np.reshape(data_import_np, (temp_no, field_no, current_no, columns, indexes))
+        # Determine the number of indices based on measurement type stored in the object
+        if measurement_type == 'VDP':
+            indexes = 6 
+        elif measurement_type == 'HallBar':
+            indexes = 4
+        else:
+             # Should not happen if import is correct, but good practice to check
+             raise ValueError(f"Unknown measurement type '{measurement_type}' in PPMS object for {ppms.filename}")
+
+        # Check if the total number of data points matches the expected shape
+        expected_points = temp_no * field_no * current_no
+        actual_points = data_import_np.shape[0]
+        
+        if expected_points != actual_points:
+             print(f"Warning: Mismatch in expected ({expected_points}) vs actual ({actual_points}) data points for {ppms.filename}. Check data integrity or ctf calculation.")
+             # Optionally, skip this file or try to proceed cautiously
+             # continue 
+        
+        # Reshape the data to: (temperature, field, current, columns, index)
+        try:
+            data_out_nd = np.reshape(data_import_np, (temp_no, field_no, current_no, columns, indexes))
+        except ValueError as e:
+             print(f"Error reshaping data for {ppms.filename}: {e}")
+             print(f"Expected shape: ({temp_no}, {field_no}, {current_no}, {columns}, {indexes})")
+             print(f"Input array size: {data_import_np.size}")
+             # Handle error, e.g., skip this file
+             continue
 
 
         #### Step 3: Re-order the extracted field value vector so they are in ascending order from -H max to H max 
-
+        # ... (Field reordering logic remains the same) ...
         # Case for field values that are originally in the order 0->Bmax,-Bmax->0
-        if np.round(field_unique[0],decimals=0) == 0 and np.round(field_unique[-1],decimals=0) == 0:
-            print('double: Field values originally in the order 0->Bmax,-Bmax->0')
+        if np.round(field_unique[0],decimals=0) == 0 and np.round(field_unique[-1],decimals=0) == 0 and field_no > 1:
+            print(f'{ppms.filename}: Field values originally in the order 0->Bmax,-Bmax->0')
             
+            middle = int(field_no/2)
             # Re-order the extracted field values vector
             if single_zero_field == True:
                 # Keep only the final zero field point
-                field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[1:int(field_no/2)]))
+                field_unique_reordered = np.concatenate((field_unique[middle:],field_unique[1:middle]))
+                field_no_reordered = field_no - 1 # Update field number
             else:
                 # Keep both zero field points
-                field_unique = np.concatenate((field_unique[int(field_no/2):],field_unique[:int(field_no/2)]))
+                field_unique_reordered = np.concatenate((field_unique[middle:],field_unique[:middle]))
+                field_no_reordered = field_no # Field number stays the same
             
             # Re-order the main data array to have the field values in the order -Hmax->Hmax
+            data_out_list = []
             for T in range(temp_no):
                 start = 0
-                middle = int(field_no/2)
                 end = int(field_no)
                 
                 if single_zero_field == True:
-                    data_np_nd_reorder = np.concatenate((data_out_nd[:,middle:end,:,:,:],data_out_nd[:,start+1:middle,:,:,:]), axis = 1)
+                    # Concatenate (-Bmax -> 0_end) and (0_start+1 -> Bmax)
+                    reordered_slice = np.concatenate((data_out_nd[T,middle:end,:,:,:],data_out_nd[T,start+1:middle,:,:,:]), axis = 0)
                 else:
-                    data_np_nd_reorder = np.concatenate((data_out_nd[:,middle:end,:,:,:],data_out_nd[:,start:middle,:,:,:]), axis = 1)
+                     # Concatenate (-Bmax -> 0_end) and (0_start -> Bmax)
+                    reordered_slice = np.concatenate((data_out_nd[T,middle:end,:,:,:],data_out_nd[T,start:middle,:,:,:]), axis = 0)
+                data_out_list.append(reordered_slice)
             
-            # Store the reordered data in the data_out variable
-            data_out = data_np_nd_reorder
+            # Store the reordered data back into a single numpy array
+            data_out = np.stack(data_out_list, axis=0)
+            field_unique = field_unique_reordered
+            field_no = field_no_reordered # Update field_no for ctf
             
             
-        # Case for field values that are originally in the order 0,-Hmax->Hmax
-        elif np.round(field_unique[0],decimals=0) == 0 and np.round(field_unique[int(field_no/2)], decimals=0) == 0:
-            print('single: Field values originally in the order 0,-Bmax->0->Bmax')
+        # Case for field values that are originally in the order 0,-Hmax->Hmax->0
+        elif np.round(field_unique[0],decimals=0) == 0 and np.round(field_unique[int(field_no/2)], decimals=0) == 0 and field_no > 2:
+            print(f'{ppms.filename}: Field values originally in the order 0,-Bmax->0->Bmax')
 
+            middle = int(field_no/2)
             # Re-order the extracted field values vector
             if single_zero_field == True:
-                # Keep only the final zero field point
-                field_unique = np.concatenate((field_unique[1:int(field_no/2)],field_unique[int(field_no/2):]))
+                # Keep only the middle zero field point: (-Bmax -> 0_mid -> Bmax)
+                field_unique_reordered = np.concatenate((field_unique[1:middle+1],field_unique[middle+1:]))
+                field_no_reordered = field_no - 1 # Update field number
             else:
-                # Keep both zero field points
-                field_unique = np.concatenate((field_unique[1:int(field_no/2)],np.array([field_unique[0]]),field_unique[int(field_no/2):]))
+                # Keep both zero field points: (-Bmax -> 0_start -> 0_mid -> Bmax)
+                field_unique_reordered = np.concatenate((field_unique[1:middle],np.array([field_unique[0]]),field_unique[middle:]))
+                field_no_reordered = field_no # Field number stays the same
             
             # Re-order the main data array to have the field values in the order -Hmax->Hmax
+            data_out_list = []
             for T in range(temp_no):
                 start = 0
-                middle = int(field_no/2)
                 end = int(field_no)
                 
                 if single_zero_field == True:
-                    # Keep only the final zero field point
-                    data_np_nd_reorder = np.concatenate((data_out_nd[:,1:middle+1,:,:,:], data_out_nd[:,middle+1:end,:,:,:]), axis = 1)
+                    # Concatenate (-Bmax -> 0_mid) and (0_mid+1 -> Bmax)
+                    reordered_slice = np.concatenate((data_out_nd[T,1:middle+1,:,:,:], data_out_nd[T,middle+1:end,:,:,:]), axis = 0)
                 else:
-                    # Keep both zero field points
-                    data_np_nd_reorder = np.concatenate((data_out_nd[:,1:middle+1,:,:,:], data_out_nd[:,0:1,:,:,:], data_out_nd[:,middle+1:end,:,:,:]), axis = 1)
-            
-            # Store the reordered data in the data_out variable
-            data_out = data_np_nd_reorder
+                    # Concatenate (-Bmax -> 0_start) and (0_mid -> Bmax)
+                    reordered_slice = np.concatenate((data_out_nd[T,1:middle,:,:,:], data_out_nd[T,0:1,:,:,:], data_out_nd[T,middle:end,:,:,:]), axis = 0)
+                data_out_list.append(reordered_slice)
+
+            # Store the reordered data back into a single numpy array
+            data_out = np.stack(data_out_list, axis=0)
+            field_unique = field_unique_reordered
+            field_no = field_no_reordered # Update field_no for ctf
             
         else:
-            print('Warning: no recognised field order therefore no reordering of the field values was applied')
-            print('Field values:',field_unique[0],field_unique[-1],field_unique[int(field_no/2)])
-            data_out = data_out_nd
+            print(f'Warning for {ppms.filename}: no recognised field order for reordering was applied.')
+            print(f'Field values start/mid/end: {field_unique[0] if field_no > 0 else "N/A"}, {field_unique[int(field_no/2)] if field_no > 1 else "N/A"}, {field_unique[-1] if field_no > 0 else "N/A"}')
+            data_out = data_out_nd # Use original data if no reordering applied
       
-        # After all the re-shaping is done (using field_no) recalculate the number of unique field points
-        if single_zero_field == True:
-            field_no = np.shape(field_unique)[0]
             
         #### Step 4: Store the current, temperature and field data in an array to output from the function for general use
-        ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
+        ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no] # Use updated field_no
         print('For file:',ppms.filename)
         print(ctf[3],'Currents (uA):',ctf[0]/1e-6)  
         print(ctf[4],'Temperatures (K):',ctf[1])
@@ -186,29 +229,34 @@ def extract_ctf(
         #### Step 5: Extract the temperature and field values averaged over all the index values and currents to give a better measurement average
         
         # Temperatures and Field values only - dimensions: (temp_no, field_no, current_no, columns, indexes)
-        temp_field_vals = np.copy(data_out[:,:,:,:2,:])
-        # Sum over currents - startingdimensions: (temp_no, field_no, current_no, columns, indexes)
-        current_averaged = np.sum(temp_field_vals, axis=2)/np.shape(temp_field_vals)[2]
-        # Sum over indexes - starting dimensions: (temp_no, field_no, columns, indexes)
-        tf_av = np.sum(current_averaged, axis=3)/np.shape(current_averaged)[3]
+        temp_field_vals = np.copy(data_out[:,:,:,:2,:]) # Use data_out which might be reordered
+        # Average over currents - starting dimensions: (temp_no, field_no, current_no, columns, indexes)
+        current_averaged = np.mean(temp_field_vals, axis=2)
+        # Average over indexes - starting dimensions: (temp_no, field_no, columns, indexes)
+        tf_av = np.mean(current_averaged, axis=3)
         # Final dimensions for tf_av: (temp_no, field_no, columns (temp, field))
 
 
         #### Step 6: Convert the numpy array to a pandas dataframe for checking values are correct and return the data
         
         # Flatten the data_out array to a 2D array so it can be put into a df for debugging
-        data_out_flat = np.copy(data_out).reshape((ctf[4]*ctf[5]*ctf[3],columns,indexes))
-        data_out_df = pd.DataFrame(data_out_flat[:,:,2], columns=['Temp (K)', 'Field (T)', 'Source (A)', 'Source (V)', 'Sense (V)'])    
+        # Use updated field_no and indexes
+        data_out_flat = np.copy(data_out).reshape((ctf[4]*ctf[5]*ctf[3], columns, indexes)) 
+        # Example: Select one index (e.g., index 0) for the DataFrame view
+        df_index_to_view = 0 
+        if df_index_to_view >= indexes:
+             df_index_to_view = 0 # Default to index 0 if chosen index is out of bounds
+        data_out_df = pd.DataFrame(data_out_flat[:,:,df_index_to_view], columns=['Temp (K)', 'Field (T)', 'Source (A)', 'Source (V)', 'Sense (V)'])    
         
         
         
         #### Step 7: Store the data in the PPMSData object
 
-        ppms.data_np = data_out_flat
-        ppms.data_np_nd = data_out
-        ppms.data_df = data_out_df
-        ppms.ctf = ctf
-        ppms.tf_av = tf_av
+        ppms.data_np = data_out_flat # Store the flattened 3D array (points, columns, index)
+        ppms.data_np_nd = data_out # Store the 5D array (temp, field, current, columns, index)
+        ppms.data_df = data_out_df # Store the example DataFrame view
+        ppms.ctf = ctf # Store the characteristics [currents, temps, fields, counts]
+        ppms.tf_av = tf_av # Store the averaged temp/field array
         
         #### Step 8: Scaling factor to output to plots for sheet resistance or resistivity
         # By default all data is handled in ohm-m
@@ -327,4 +375,3 @@ def filter_data(raw_data, filt_kern = 0, filt_sigma = 0, threshold = 0):
         dat_filtered[outliers] = np.interp(np.flatnonzero(outliers), np.flatnonzero(~outliers), raw_data[~outliers])    
         return dat_filtered
 
-    

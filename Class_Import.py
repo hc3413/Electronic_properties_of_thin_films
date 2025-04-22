@@ -15,16 +15,16 @@ class PPMSData:
     
     tf_av: np.ndarray = None #average temperature and field values as measured during each set of current measurements
     
-    res_data: np.ndarray = None #resistivity data calculated using the Van der Pauw method or using a HallBar: columns = ['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)']
-    res_data_df: pd.DataFrame = None #resistivity data calculated using the Van der Pauw method or a HallBar in a pandas dataframe
-    R_squared_res: list = None #R-squared values for the linear regression of the IV data
+    res_data: np.ndarray = None # Bulk resistivity data (rho_xx) calculated using VDP or HallBar: columns = ['Temp (K)', 'Field (T)', 'rho_xx_A (Ohm.m)', 'rho_xx_B (Ohm.m)','rho_xx_average (Ohm.m)', 'rho_error (Ohm.m)']
+    res_data_df: pd.DataFrame = None # Bulk resistivity data (rho_xx) calculated using VDP or HallBar in a pandas dataframe
+    R_squared_res: list = None #R-squared values for the linear regression of the I-V data used for rho_xx calculation
     
-    mag_res: np.ndarray = None #magnetoresistance data calculated for each temperature and field strength
+    mag_res: np.ndarray = None #magnetoresistance data calculated for each temperature and field strength: columns = [MR_A(%), MR_B(%), MR_avg(%), MR_avg_error(%)]
     
-    hall_data: np.ndarray = None #Hall resistivity data calculated for each temperature and field strength: columns = ['Temp (K)', 'Field (T)', 'rho_xy_A(ohm.m)', 'R_squared(I)_A', 'rho_xy_B(ohm.m)','R_squared(I)_B', 'rho_xy_average(ohm.m)']
-    hall_data_df: pd.DataFrame = None #Hall resistivity data calculated for each temperature and field strength in a pandas dataframe
-    hall_coefficient: np.ndarray = None #Hall coefficient data calculated for each temperature: columns = ['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average']
-    hall_coefficient_df: pd.DataFrame = None #Hall coefficient data calculated for each temperature in a pandas dataframe
+    hall_data: np.ndarray = None #Hall resistivity data (rho_xy) calculated for each temperature and field strength: columns = ['Temp (K)', 'Field (T)', 'rho_xy_A (Ohm.m)', 'R^2(I-V)_A', 'rho_xy_B (Ohm.m)','R^2(I-V)_B', 'rho_xy_average (Ohm.m)']
+    hall_data_df: pd.DataFrame = None #Hall resistivity data (rho_xy) calculated for each temperature and field strength in a pandas dataframe
+    hall_coefficient: np.ndarray = None #Hall coefficient (R_H) and derived data calculated for each temperature: columns = ['Temp (K)', 'HallCoeff_A (m3/C)', 'R^2(B)_A', 'HallCoeff_B (m3/C)','R^2(B)_B', 'HallCoeff_Avg (m3/C)','R^2(B)_Avg', 'n (cm^-3)', 'n_Error (cm^-3)', 'Mobility (cm^2/Vs)', 'Mobility_Error (cm^2/Vs)']
+    hall_coefficient_df: pd.DataFrame = None #Hall coefficient (R_H) and derived data calculated for each temperature in a pandas dataframe
     
     directory: str = None #directory to save the output files to
     filename: str = None #filename of the data
@@ -33,6 +33,7 @@ class PPMSData:
     plot_str: str = None #strings to be used at the start of the figure file name, including the sample code
     sample_code: str = None # Sample code to identify the sample
     measurement_type: str = 'VDP' #measurement type to identify the measurement type as VDP (Van der Pauw Geometry) or HallBar (Hall Bar Geometry)
+    hb_dimensions: tuple = None # dimensions of the Hall Bar in um: (width of channel, length between voltage arms)
 
 def import_ppms_data(
     path, #path to the directory containing the PPMS data
@@ -40,12 +41,13 @@ def import_ppms_data(
     material = 'NA', #materials of the thin film stack
     sample_code = 'NA', #strings to be used at the start of the figure file name, including the sample code
     V_inv = False, #invert the sense voltage in case the cables were switched during the measurement (for HC011)
-    measurement_type: str = 'VDP' #measurement type to identify the measurement type as VDP or HallBar
+    measurement_type: str = 'VDP', #measurement type to identify the measurement type as 'VDP' or 'HallBar'
+    hb_dimensions: tuple = None # Hall bar dimensions in um (width, length_between_arms), required if measurement_type='HallBar'
     ):
     '''
     This function imports the data from the PPMS instrument.
-    Meausured in the Van der Pauw configuration with 6 indices - 0/1 are the Hall Voltage measurements 2/3/4/5 are the resistivity measurements.
-    Meausred in the HallBar configuration with 4 indices - 0/1 are the Hall Voltage measurements 2/3 are the resistivity measurements.
+    Measured in the Van der Pauw configuration with 6 indices - 0/1 are the Hall Voltage measurements 2/3/4/5 are the resistivity measurements.
+    Measured in the HallBar configuration with 4 indices - 0/1 are the resistivity measurements 2/3 are the Hall Voltage measurements.
     Note that it converts the field from Oe to Tesla. (strictly speaking from H to B)
     '''
     PPMS_files = []
@@ -104,13 +106,18 @@ def import_ppms_data(
         # 6th for the VDP data and 4th for the HallBar data
         if measurement_type == 'VDP':
             slice_size = 6
+            indexes = 6
         elif measurement_type == 'HallBar':
             slice_size = 4
+            indexes = 4
+            if hb_dimensions is None:
+                 raise ValueError("hb_dimensions must be provided for measurement_type='HallBar'")
         else:
             raise ValueError("Invalid measurement type. Use 'VDP' or 'HallBar'.")
 
         # Slice the array, then stack these 2d arrays to generate a 3d array
-        ppms_np = np.array([ndnp[q::6,:-1] for q in range(6)]) # the :-1 is to remove the index column
+        # The :-1 is to remove the original index column from the raw data
+        ppms_np = np.array([ndnp[q::slice_size,:-1] for q in range(slice_size)]) 
         # Re-order the array to have the shape (rows, columns, index)
         ppms_np = ppms_np.transpose(1,2,0)   
 
@@ -128,10 +135,21 @@ def import_ppms_data(
         path_out = Path(path_out_str)
         
         # Store the extracted data into a list of PPMSData objects
-        PPMS_files.append(PPMSData(data_import_np = ppms_np, data_import_df = ppms_df, filename = fi, film_thickness = film_thickness, material = material, directory = path_out, plot_str = fi, sample_code = sample_code))
+        PPMS_files.append(PPMSData(
+            data_import_np = ppms_np, 
+            data_import_df = ppms_df, 
+            filename = fi.name, # Use fi.name to get just the filename string
+            film_thickness = film_thickness, 
+            material = material, 
+            directory = path_out, 
+            plot_str = fi.stem, # Use fi.stem for filename without extension
+            sample_code = sample_code,
+            measurement_type = measurement_type,
+            hb_dimensions = hb_dimensions # Store dimensions if HallBar
+            ))
         
         # Print the filenames of the imported data to check they are correct along with the shape of the numpy array
-        print(f'File {count+1} imported: {fi} with shape {ppms_np.shape}')
+        print(f'File {count+1} imported: {fi.name} with shape {ppms_np.shape}')
     return PPMS_files
 
 
@@ -143,9 +161,13 @@ def import_all_datasets():
     
     Returns:
         list: A list of PPMSData objects containing all imported datasets.
+        all_directories: A list of directories where the datasets are stored which is used for both VDP and HallBar datasets but the type is specified
+        There are separate output lists for VDP and HallBar datasets so they can have different processing functions applied to them
+        measurement_type: A string indicating the type of measurement ('VDP' or 'HallBar')
     """
     all_directories = []
-    dat_raw = []
+    dat_raw_vdp = []
+    dat_raw_hb = []
     
     # Define all datasets as a list of dictionaries for easier maintenance
     datasets = [
@@ -328,6 +350,7 @@ def import_all_datasets():
             'V_inv': False,
             'notes': 'medium hydrogen concentration annealed sample'
         },
+        
     ]
     
     # Import each dataset
@@ -339,16 +362,51 @@ def import_all_datasets():
         v_inv = dataset.get('V_inv', False)
         # Extract the measurement type if it exists, otherwise default to 'VDP'
         measurement_type = dataset.get('measurement_type', 'VDP')
+        # Extract Hall bar dimensions if measurement_type is 'HallBar'
+        hb_dimensions = dataset.get('hb_dimensions', None) if measurement_type == 'HallBar' else None
+
         
-        # Import the data
-        dat_raw.append(import_ppms_data(
-            path,
-            film_thickness=dataset['film_thickness'],
-            material=dataset['material'],
-            sample_code=dataset['sample_code'],
-            V_inv=v_inv,
-            measurement_type=measurement_type
-        ))
+        if measurement_type == 'VDP':
+            # Import the VDP data
+            dat_raw_vdp.append(import_ppms_data(
+                path,
+                film_thickness=dataset['film_thickness'],
+                material=dataset['material'],
+                sample_code=dataset['sample_code'],
+                V_inv=v_inv,
+                measurement_type=measurement_type
+                # No hb_dimensions needed for VDP
+            ))
+            
+        elif measurement_type == 'HallBar':
+            # Check if hb_dimensions were provided for HallBar type
+            if hb_dimensions is None:
+                print(f"Warning: hb_dimensions not provided for HallBar sample {dataset['sample_code']}. Skipping this dataset.")
+                continue 
+
+            # Import the HallBar data, passing hb_dimensions
+            dat_raw_hb.append(import_ppms_data(
+                path,
+                film_thickness=dataset['film_thickness'],
+                material=dataset['material'],
+                sample_code=dataset['sample_code'],
+                V_inv=v_inv,
+                measurement_type=measurement_type,
+                hb_dimensions=hb_dimensions # Pass the dimensions here
+            ))
+
     
-    print(f"Successfully imported {len(datasets)} datasets.")
-    return dat_raw
+    print(f"Successfully imported {len(dat_raw_vdp)} VDP dataset(s) and {len(dat_raw_hb)} HallBar dataset(s).")
+    return dat_raw_vdp, dat_raw_hb
+
+
+# {
+#             'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/HallBar_DV127_WO3_YAO_STO/Data/',
+#             'film_thickness': 140e-9,
+#             'material': '$WO_3/YAlO_3/STO$',
+#             'sample_code': 'DV127',
+#             'V_inv': False,
+#             'measurement_type': 'HallBar',
+#             'hb_dimensions': (30, 100),  # width of channel, length between voltage arms in um
+#             'notes': 'processed into hall bar to look at disparity between different directions'
+#         },
