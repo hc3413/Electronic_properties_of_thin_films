@@ -191,3 +191,221 @@ def generate_colormaps_and_normalizers(dat):
    
 
     return cmap_temp, cmap_field, norm_temp, norm_field, mark_p, min_temp, max_temp, min_field, max_field
+
+
+
+
+# Define a function for the PPTX module to add a slide with a title and image
+# --- Define the standard font for the slide (consistent usage) ---
+SLIDE_FONT = "Avenir" # Note: Ensure this font is available on the system running the code AND the system viewing the PPTX
+
+def add_slide(fig, title, notes, prs, path_out):
+    """
+    Adds a slide to the presentation with a custom title bar (gradient),
+    figure on the left, and notes on the right, using the defined SLIDE_FONT.
+
+    Args:
+        fig: The matplotlib figure object to add.
+        title (str): The title for the slide.
+        notes (list): A list of strings for the notes section.
+        prs: The Presentation object.
+        path_out (str or Path): The directory to save the temporary image file.
+    """
+    # Check if figure exists and is valid
+    if fig is None or not hasattr(fig, 'axes') or len(fig.axes) == 0:
+        print(f"Skipping '{title}': Figure does not exist or is empty.")
+        if fig:
+            try:
+                import matplotlib.pyplot as plt
+                plt.close(fig)
+            except ImportError: pass
+            except Exception as e_close: print(f"Error closing invalid figure '{title}': {e_close}")
+        return
+
+    # --- Use BLANK layout ---
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+
+    # --- Set background color ---
+    background = slide.background
+    fill = background.fill
+    fill.solid()
+    fill.fore_color.rgb = RGBColor(240, 240, 240)
+
+    # --- Create Title Rectangle ---
+    slide_width = prs.slide_width
+    slide_height = prs.slide_height
+    title_box_height = Inches(0.819)
+    title_box = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE,
+        left=0, top=0, width=slide_width, height=title_box_height
+    )
+    # Remove border
+    title_box.line.fill.background()
+    title_box.line.width = Pt(0)
+
+    # --- Apply Linear Gradient Fill to Title Rectangle ---
+    fill = title_box.fill
+    fill.gradient()
+    fill.gradient_angle = 0.0 # Linear Left to Right
+
+    # --- Define gradient stops ---
+    if len(fill.gradient_stops) >= 2: # Check if stops exist
+        stop1 = fill.gradient_stops[0]
+        stop1.color.rgb = RGBColor(40, 80, 160) # Left color
+        stop1.position = 0.1
+
+        stop2 = fill.gradient_stops[1]
+        stop2.color.rgb = RGBColor(100, 160, 220) # Right color
+        stop2.position = 1.0
+    else:
+        print(f"Warning: Could not set gradient stops for title '{title}'. Default gradient may apply.")
+        # Fallback: fill.solid(); fill.fore_color.rgb = RGBColor(68, 114, 196)
+
+    # --- Add Text Box FOR the title ON TOP ---
+    title_left = Inches(0.2)
+    title_top = Inches(0.1)
+    title_width = slide_width - Inches(0.4)
+    title_textbox_height = title_box_height - Inches(0.1)
+    title_textbox = slide.shapes.add_textbox(
+        title_left, title_top, title_width, title_textbox_height
+    )
+    tf = title_textbox.text_frame
+    tf.margin_left = 0
+    tf.margin_right = 0
+    tf.margin_top = 0
+    tf.margin_bottom = 0
+    tf.word_wrap = False
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+
+    p = tf.paragraphs[0]
+    p.text = title
+    p.font.name = SLIDE_FONT
+    p.font.size = Pt(20)
+    p.font.bold = False
+    p.font.color.rgb = RGBColor(255, 255, 255)
+    p.alignment = PP_ALIGN.LEFT
+
+    # --- Save the figure as an image ---
+    output_dir = Path(path_out)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    safe_title = "".join(c if c.isalnum() else "_" for c in title)
+    img_path = output_dir / f'{safe_title}.png'
+
+    try:
+        fig.savefig(img_path, dpi=300, bbox_inches='tight', transparent=True)
+        try:
+            import matplotlib.pyplot as plt
+            plt.close(fig)
+        except ImportError: print("Warning: Matplotlib not imported, cannot close figure.")
+        except Exception as e_close: print(f"Error closing figure '{title}': {e_close}")
+    except Exception as e_save:
+        print(f"Error saving figure '{title}': {e_save}")
+        if fig:
+            try:
+                import matplotlib.pyplot as plt
+                plt.close(fig)
+            except Exception: pass
+        return
+
+    # --- Define Layout Areas ---
+    margin = Inches(0.2)
+    content_top = title_box_height + margin
+    content_height = slide_height - content_top - margin
+    # Calculate total width available for columns after accounting for 3 margins (left, center, right)
+    total_content_width = slide_width - (3 * margin)
+    # Left column takes 60% of the available width
+    left_column_width = 0.6 * total_content_width
+    # Right column takes 40% of the available width
+    right_column_width = 0.4 * total_content_width
+    # Right column starts after the left margin, the left column width, and the center margin
+    right_column_left = margin + left_column_width + margin
+
+    # --- Add the image to the left column ---
+    img_left = margin
+    img_top = content_top
+    max_img_width = left_column_width
+    max_img_height = content_height
+
+    try:
+        # Add picture, initially using max width
+        # Ensure initial position and width are integers (though Inches usually handles this)
+        pic = slide.shapes.add_picture(str(img_path), int(img_left), int(img_top), width=int(max_img_width))
+
+        # Scale height if it exceeds max height, adjusting width proportionally
+        if pic.height > max_img_height:
+            scale_factor = max_img_height / pic.height
+            pic.height = int(max_img_height) # Cast to int
+            pic.width = int(pic.width * scale_factor) # Cast to int
+            # Recenter horizontally after scaling
+            pic.left = int(img_left + (max_img_width - pic.width) / 2) # Cast to int
+
+        # Scale width if it exceeds max width (less likely after initial width setting, but good practice)
+        elif pic.width > max_img_width: # Use elif to avoid double scaling if both are too large initially
+             scale_factor = max_img_width / pic.width
+             pic.width = int(max_img_width) # Cast to int
+             pic.height = int(pic.height * scale_factor) # Cast to int
+             # Recenter vertically after scaling
+             pic.top = int(img_top + (max_img_height - pic.height) / 2) # Cast to int
+
+        # # Center vertically if image is smaller than available height
+        # elif pic.height < max_img_height:
+        #      pic.top = int(img_top + (max_img_height - pic.height) / 2) # Cast to int
+        
+        # # Center horizontally if image is smaller than available width (added for completeness)
+        # elif pic.width < max_img_width:
+        #      pic.left = int(img_left + (max_img_width - pic.width) / 2) # Cast to int
+
+
+        print(f"Added slide: {title}")
+
+        # --- Add Notes Box to the right column if notes are provided ---
+        if notes and isinstance(notes, list) and any(n and n.strip() for n in notes):
+            notes_left = right_column_left
+            notes_top = content_top
+            notes_width = right_column_width
+            notes_height = content_height # Use full available height
+
+            # Ensure notes box dimensions are integers
+            notes_box = slide.shapes.add_textbox(int(notes_left), int(notes_top), int(notes_width), int(notes_height))
+            notes_tf = notes_box.text_frame
+            notes_tf.word_wrap = True
+            notes_tf.vertical_anchor = MSO_ANCHOR.TOP # Anchor text to top
+            notes_tf.clear()
+
+            for line in notes:
+                line = line.strip()
+                if line:
+                    p_notes = notes_tf.add_paragraph()
+                    # Add bullet point using unicode character
+                    p_notes.text = f"• {line}"
+                    p_notes.font.name = SLIDE_FONT
+                    p_notes.font.size = Pt(14)
+                    p_notes.font.color.rgb = RGBColor(0, 0, 0)
+                    p_notes.line_spacing = 1.1
+                    p_notes.space_before = Pt(3) # Add space before bullet point
+                    p_notes.space_after = Pt(3) # Add space after bullet point
+
+            # Remove extra space after the last paragraph
+            if len(notes_tf.paragraphs) > 0:
+                notes_tf.paragraphs[-1].space_after = Pt(0)
+
+    except FileNotFoundError:
+        print(f"Error adding picture: Image file not found at '{img_path}'.")
+    except Exception as e_add:
+        print(f"Error adding picture or notes for slide '{title}': {e_add}")
+
+    # Clean up the saved image file
+    try:
+        os.remove(img_path)
+    except OSError as e_remove:
+        print(f"Warning: Could not remove temporary image file '{img_path}': {e_remove}")
+
+
+def sample_tag_gen(dat):
+    '''function to generate a list of sample tags for each sample in the dat list 
+    in the format [dat[0].sample_code = dat[0].material, dat[1].sample_code = dat[1].material, ...]'''
+    tag_list = []
+    for d in dat:
+        tag_list.append(f"{d.sample_code} = {d.material[1:-1]}")
+    return tag_list
