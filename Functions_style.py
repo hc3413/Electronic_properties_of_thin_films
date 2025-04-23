@@ -199,10 +199,17 @@ def generate_colormaps_and_normalizers(dat):
 # --- Define the standard font for the slide (consistent usage) ---
 SLIDE_FONT = "Avenir" # Note: Ensure this font is available on the system running the code AND the system viewing the PPTX
 
-def add_slide(fig, title, notes, prs, path_out):
+def add_slide(fig,
+              title,
+              notes,
+              prs,
+              path_out,
+              layout: str = 'Horizontal' # 'Horizontal' for text to right of figure or 'Vertical' for text below figure
+              ):
     """
     Adds a slide to the presentation with a custom title bar (gradient),
-    figure on the left, and notes on the right, using the defined SLIDE_FONT.
+    figure, and notes, using the defined SLIDE_FONT. Layout can be 'Horizontal'
+    (figure left, text right) or 'Vertical' (figure top, text bottom).
 
     Args:
         fig: The matplotlib figure object to add.
@@ -210,6 +217,7 @@ def add_slide(fig, title, notes, prs, path_out):
         notes (list): A list of strings for the notes section.
         prs: The Presentation object.
         path_out (str or Path): The directory to save the temporary image file.
+        layout (str): 'Horizontal' or 'Vertical'. Defaults to 'Horizontal'.
     """
     # Check if figure exists and is valid
     if fig is None or not hasattr(fig, 'axes') or len(fig.axes) == 0:
@@ -312,60 +320,99 @@ def add_slide(fig, title, notes, prs, path_out):
     margin = Inches(0.2)
     content_top = title_box_height + margin
     content_height = slide_height - content_top - margin
-    # Calculate total width available for columns after accounting for 3 margins (left, center, right)
-    total_content_width = slide_width - (3 * margin)
-    # Left column takes 60% of the available width
-    left_column_width = 0.6 * total_content_width
-    # Right column takes 40% of the available width
-    right_column_width = 0.4 * total_content_width
-    # Right column starts after the left margin, the left column width, and the center margin
-    right_column_left = margin + left_column_width + margin
+    total_content_width = slide_width - (2 * margin) # Total width available for content
 
-    # --- Add the image to the left column ---
-    img_left = margin
-    img_top = content_top
-    max_img_width = left_column_width
-    max_img_height = content_height
+    if layout.lower() == 'vertical':
+        # Vertical Layout: Figure top (60%), Text bottom (40%)
+        top_section_height = 0.6 * content_height
+        bottom_section_height = 0.4 * content_height
+        bottom_section_top = content_top + top_section_height + margin
+
+        # Figure area
+        img_left = margin
+        img_top = content_top
+        max_img_width = total_content_width
+        max_img_height = top_section_height
+        img_center_ref_width = total_content_width # Width to center the image within
+
+        # Notes area
+        notes_left = margin
+        notes_top = bottom_section_top
+        notes_width = total_content_width
+        notes_height = bottom_section_height
+
+    else: # Default to Horizontal Layout
+        
+        if layout.lower() != 'horizontal':
+            print(f"Warning: Invalid layout '{layout}' specified. Defaulting to 'Horizontal'.")
+            
+        # Horizontal Layout: Figure left (60%), Text right (40%)
+        # Calculate total width available for columns after accounting for 3 margins (left, center, right)
+        available_columns_width = slide_width - (3 * margin)
+        # Left column takes 60% of the available width
+        left_column_width = 0.6 * available_columns_width
+        # Right column takes 40% of the available width
+        right_column_width = 0.4 * available_columns_width
+        # Right column starts after the left margin, the left column width, and the center margin
+        right_column_left = margin + left_column_width + margin
+
+        # Figure area
+        img_left = margin
+        img_top = content_top
+        max_img_width = left_column_width
+        max_img_height = content_height
+        img_center_ref_width = left_column_width # Width to center the image within
+
+        # Notes area
+        notes_left = right_column_left
+        notes_top = content_top
+        notes_width = right_column_width
+        notes_height = content_height
+        
+        
 
     try:
-        # Add picture, initially using max width
-        # Ensure initial position and width are integers (though Inches usually handles this)
+        # Add picture, initially using max width for its area
         pic = slide.shapes.add_picture(str(img_path), int(img_left), int(img_top), width=int(max_img_width))
 
-        # Scale height if it exceeds max height, adjusting width proportionally
+        # --- Scaling and Centering Logic ---
+        scaled_height = False
+        scaled_width = False
+
+        # 1. Scale height if it exceeds max height, adjusting width proportionally
         if pic.height > max_img_height:
             scale_factor = max_img_height / pic.height
-            pic.height = int(max_img_height) # Cast to int
-            pic.width = int(pic.width * scale_factor) # Cast to int
-            # Recenter horizontally after scaling
-            pic.left = int(img_left + (max_img_width - pic.width) / 2) # Cast to int
+            pic.height = int(max_img_height)
+            pic.width = int(pic.width * scale_factor)
+            scaled_height = True
 
-        # Scale width if it exceeds max width (less likely after initial width setting, but good practice)
-        elif pic.width > max_img_width: # Use elif to avoid double scaling if both are too large initially
-             scale_factor = max_img_width / pic.width
-             pic.width = int(max_img_width) # Cast to int
-             pic.height = int(pic.height * scale_factor) # Cast to int
-             # Recenter vertically after scaling
-             pic.top = int(img_top + (max_img_height - pic.height) / 2) # Cast to int
+        # 2. Scale width if it exceeds max width (could happen after height scaling)
+        if pic.width > max_img_width:
+            scale_factor = max_img_width / pic.width
+            pic.width = int(max_img_width)
+            # Only adjust height if width scaling happened *after* height scaling didn't max it out
+            if not scaled_height:
+                 pic.height = int(pic.height * scale_factor)
+            scaled_width = True
 
-        # # Center vertically if image is smaller than available height
-        # elif pic.height < max_img_height:
-        #      pic.top = int(img_top + (max_img_height - pic.height) / 2) # Cast to int
-        
-        # # Center horizontally if image is smaller than available width (added for completeness)
-        # elif pic.width < max_img_width:
-        #      pic.left = int(img_left + (max_img_width - pic.width) / 2) # Cast to int
+        # 3. Center the potentially scaled image within its designated area
+        # Center vertically
+        if pic.height < max_img_height:
+            pic.top = int(img_top + (max_img_height - pic.height) / 2)
+        else: # If scaling maxed out height, ensure it's at the top
+            pic.top = int(img_top)
+
+        # Center horizontally within the reference width for the layout
+        if pic.width < img_center_ref_width:
+            pic.left = int(img_left + (img_center_ref_width - pic.width) / 2)
+        else: # If scaling maxed out width, ensure it's at the left edge
+             pic.left = int(img_left)
 
 
-        print(f"Added slide: {title}")
+        print(f"Added slide: {title} (Layout: {layout})")
 
-        # --- Add Notes Box to the right column if notes are provided ---
+        # --- Add Notes Box if notes are provided ---
         if notes and isinstance(notes, list) and any(n and n.strip() for n in notes):
-            notes_left = right_column_left
-            notes_top = content_top
-            notes_width = right_column_width
-            notes_height = content_height # Use full available height
-
             # Ensure notes box dimensions are integers
             notes_box = slide.shapes.add_textbox(int(notes_left), int(notes_top), int(notes_width), int(notes_height))
             notes_tf = notes_box.text_frame
@@ -406,6 +453,20 @@ def sample_tag_gen(dat):
     '''function to generate a list of sample tags for each sample in the dat list 
     in the format [dat[0].sample_code = dat[0].material, dat[1].sample_code = dat[1].material, ...]'''
     tag_list = []
+    sample_code_list = []
     for d in dat:
-        tag_list.append(f"{d.sample_code} = {d.material[1:-1]}")
+        
+        # Only add the tag if the sample code is not already in the sample_code_list
+        if d.sample_code not in sample_code_list:
+            
+            # Slice to remove the $ signs from the name
+            material = d.material[1:-1]
+            #remove any underscores from the material name
+            material = material.replace('_', '') 
+            # Add the tag to the list
+            tag_list.append(f"{d.sample_code} = {material}")
+            
+            # Add the sample code to the sample_code_list
+            sample_code_list.append(d.sample_code)
+            
     return tag_list
