@@ -64,8 +64,7 @@ def vdp_resistivity(
             R_squared = []
             
             # Initialize an empty np aray with indices: (temp_index, field_index, data_colums) 
-            # storing each temperature, field, and the corresponding resitivities for: config A, config B, average of A and B along with the error
-            res_data = np.zeros((ctf[4],ctf[5], 6))
+            res_data = np.zeros((ctf[4],ctf[5], 7)) # Use 7 columns: Temp, Field, rho_A, rho_B, rho_avg, rho_error, rho_fit (empty for now)
 
             #Loop over each temperature and field combination, calculating the sheet resistivity using the Van der Pauw method
             for Ti in range(ctf[4]): #for each temperature index
@@ -136,7 +135,7 @@ def vdp_resistivity(
             # Flatten the res_data array to a 2D array so it can be put into a df for debugging
             res_data_flat = res_data.reshape((ctf[4]*ctf[5],6))  
             # Convert the numpy array to a pandas dataframe 
-            res_data_df = pd.DataFrame(res_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)', 'rho_error(ohm.m)'])
+            res_data_df = pd.DataFrame(res_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)', 'rho_error(ohm.m)', 'rho_fit(ohm.m)'])
             
             # Store the data in the PPMSData object
             ppms.res_data = res_data
@@ -181,7 +180,7 @@ def vdp_hall(
             hall_data = np.zeros((ctf[4],ctf[5], 7))
             
             # Initialize an empty np array to store the Temperature, Hall coefficient A, R^2 A, Hall Coefficient B, and average Hall coefficients
-            hall_coefficient = np.zeros((ctf[4], 11))
+            hall_coefficient = np.zeros((ctf[4], 13)) #(T_index, [T, 'Rh_A', 'R^2_A', 'Rh_B','R^2_B', 'Rh_av','R^2_av', 'n', 'n_error', 'u', 'u_error', 'n_fitted', 'u_fitted'])
 
             #Loop over each temperature using regression on the hall_resistivity-field  data to obtain the Hall coefficient at each temperature
             for Ti in range(ctf[4]):
@@ -257,7 +256,7 @@ def vdp_hall(
             hall_data_df = pd.DataFrame(hall_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xy_A(ohm.m)', 'R_squared(I)_A', 'rho_xy_B(ohm.m)','R_squared(I)_B', 'rho_xy_average(ohm.m)'])
             
             # Convert the numpy array to a pandas dataframe for the Hall coefficeint
-            hall_coefficient_df = pd.DataFrame(hall_coefficient, columns=['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average','R^2(H)_average', 'Charge Carrier Density (cm^-2)', 'Charge Carrier Density Error (cm^-2)', 'Mobility (cm^2/Vs)', 'Mobility Error (cm^2/Vs)'])
+            hall_coefficient_df = pd.DataFrame(hall_coefficient, columns=['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average','R^2(H)_average', 'Charge Carrier Density (cm^-2)', 'Charge Carrier Density Error (cm^-2)', 'Mobility (cm^2/Vs)', 'Mobility Error (cm^2/Vs)', 'n_fitted (cm^-3)', 'Mobility_fitted (cm^2/Vs)' ])
             
             # Store the data in the PPMSData object
             ppms.hall_data = hall_data

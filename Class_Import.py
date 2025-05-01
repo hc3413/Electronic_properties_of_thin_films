@@ -30,10 +30,9 @@ class PPMSData:
     hall_coefficient_df: pd.DataFrame = None #Hall coefficient (R_H) and derived data calculated for each temperature in a pandas dataframe
     
     # Fitted Data
-    res_data_fit: np.ndarray = None #Fitted resistivity data (rho_xx): duplicate of measured data, with relevant colums changed to keep shape: columns = ['Temp (K)', 'Field (T)', 'rho_xx_A (Ohm.m)', 'rho_xx_B (Ohm.m)','rho_xx_average (Ohm.m)', 'rho_error (Ohm.m)']
-    #hall_data_fit: np.ndarray = None #Fitted Hall resistivity data (rho_xy) duplicate of measured data, with relevant colums changed to keep shape: columns = ['Temp (K)', 'Field (T)', 'rho_xy_A (Ohm.m)', 'R^2(I-V)_A', 'rho_xy_B (Ohm.m)','R^2(I-V)_B', 'rho_xy_average (Ohm.m)']
-    hall_coefficient_fit: np.ndarray = None #Fitted Hall data, duplicate of measured data, with relevant colums changed to keep shape: columns = ['Temp (K)', 'HallCoeff_A (m3/C)', 'R^2(B)_A', 'HallCoeff_B (m3/C)','R^2(B)_B', 'HallCoeff_Avg (m3/C)','R^2(B)_Avg', 'n (cm^-3)', 'n_Error (cm^-3)', 'Mobility (cm^2/Vs)', 'Mobility_Error (cm^2/Vs)']
-    
+
+
+
     # File and directory parameters
     directory: str = None #directory to save the output files to
     filename: str = None #filename of the data

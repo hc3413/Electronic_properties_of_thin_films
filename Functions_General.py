@@ -295,8 +295,7 @@ def magnetoresistance(PPMS_files, exclude_res=False):
         res_data = ppms.res_data 
        
         # Shape (ctf[4], ctf[5], 4) (temperature, field, columns)
-        # Columns: MR_A, MR_B, MR_avg, MR_avg_error
-        mag_res = np.zeros((ctf[4], ctf[5], 4))
+        mag_res = np.zeros((ctf[4], ctf[5], 5)) # Columns: MR_A, MR_B, MR_avg, MR_avg_error, MR_fitted
         
         zero_field_index = int(ctf[5] / 2)  # Middle (zero) index
 
