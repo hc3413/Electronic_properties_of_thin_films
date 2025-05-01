@@ -30,6 +30,7 @@ def unique_T_values(data_import_np):
         print('WARNING Potential Temperature Issues: The erronous temperature points are:',temp_unique[temp_unique_counts <= np.mean(temp_unique_counts)*0.8])
         # Remove the erronous temperature points that don't appear frequently enough thus are probably from small temperature fluctuations
         temp_unique = temp_unique[temp_unique_counts >= np.mean(temp_unique_counts)*0.8]
+        
     
     temp_no = temp_unique.shape[0]
     
@@ -143,7 +144,13 @@ def extract_ctf(
         #### Step 3: Re-order the extracted field value vector so they are in ascending order from -H max to H max 
         # ... (Field reordering logic remains the same) ...
         # Case for field values that are originally in the order 0->Bmax,-Bmax->0
-        if np.round(field_unique[0],decimals=0) == 0 and np.round(field_unique[-1],decimals=0) == 0 and field_no > 1:
+        
+        # Don't reorder the field values if the rotator is used
+        if ppms.rotator == True:
+            data_out = data_out_nd # Use original data if no reordering applied
+        
+        # Case for 'double' field falues with order 0 ->Bmax,-Bmax->0 
+        elif np.round(field_unique[0],decimals=0) == 0 and np.round(field_unique[-1],decimals=0) == 0 and field_no > 1:
             print(f'{ppms.filename}: Field values originally in the order 0->Bmax,-Bmax->0')
             
             middle = int(field_no/2)

@@ -58,12 +58,10 @@ def vdp_resistivity(
             ctf = ppms.ctf
             tf_av = ppms.tf_av
             data_np = ppms.data_np
-            data_np_nd = ppms.data_np_nd
-            
+            data_np_nd = ppms.data_np_nd #(temperature, field, current , columns (temp, field, source A, source V/theta, sense V), index)
             
             # Initialise a list to store the R^2 value for the IV data and check we have a good fit for the linear regression
             R_squared = []
-            
             
             # Initialize an empty np aray with indices: (temp_index, field_index, data_colums) 
             # storing each temperature, field, and the corresponding resitivities for: config A, config B, average of A and B along with the error
@@ -177,7 +175,7 @@ def vdp_hall(
             film_thickness = ppms.film_thickness
             ctf = ppms.ctf
             tf_av = ppms.tf_av
-            data_np_nd = ppms.data_np_nd
+            data_np_nd = ppms.data_np_nd #(temperature, field, current , columns (temp, field, source A, source V/theta, sense V), index)
             
             # Initialize an empty np aray to store the temperature, field, hall resistance: in config A, R^2 for that fit, Hall resistance in  config B, R^2 for that, and Average 
             hall_data = np.zeros((ctf[4],ctf[5], 7))

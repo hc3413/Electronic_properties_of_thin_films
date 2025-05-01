@@ -4,45 +4,58 @@ from import_dep import *
 # Define a class to store the VNA data alongside its ascociated with the filename, device index, state and DC resistance
 @dataclass
 class PPMSData:
+    # Raw Data
     data_import_np: np.ndarray = None #raw data from the PPMS instrument
     data_import_df: pd.DataFrame = None #data from the PPMS instrument in a pandas dataframe
     
+    # Sorted Data
     data_np: np.ndarray = None #PPMS data sliced and reordered for analysis
     data_np_nd: np.ndarray = None #PPMS data sliced into a multi-dimensional numpy array with the dimensions (temperature, field, current, columns, index)
     data_df: pd.DataFrame = None #PPMS data sliced and reordered for analysis in a pandas dataframe
     
+    # Storage Parameters for field/current/temperature values
     ctf: list = None # Storing extract values from data [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
-    
     tf_av: np.ndarray = None #average temperature and field values as measured during each set of current measurements
     
+    # Calculated Resistivity data
     res_data: np.ndarray = None # Bulk resistivity data (rho_xx) calculated using VDP or HallBar: columns = ['Temp (K)', 'Field (T)', 'rho_xx_A (Ohm.m)', 'rho_xx_B (Ohm.m)','rho_xx_average (Ohm.m)', 'rho_error (Ohm.m)']
     res_data_df: pd.DataFrame = None # Bulk resistivity data (rho_xx) calculated using VDP or HallBar in a pandas dataframe
     R_squared_res: list = None #R-squared values for the linear regression of the I-V data used for rho_xx calculation
-    
     mag_res: np.ndarray = None #magnetoresistance data calculated for each temperature and field strength: columns = [MR_A(%), MR_B(%), MR_avg(%), MR_avg_error(%)]
     
+    # Calculated Hall data
     hall_data: np.ndarray = None #Hall resistivity data (rho_xy) calculated for each temperature and field strength: columns = ['Temp (K)', 'Field (T)', 'rho_xy_A (Ohm.m)', 'R^2(I-V)_A', 'rho_xy_B (Ohm.m)','R^2(I-V)_B', 'rho_xy_average (Ohm.m)']
     hall_data_df: pd.DataFrame = None #Hall resistivity data (rho_xy) calculated for each temperature and field strength in a pandas dataframe
     hall_coefficient: np.ndarray = None #Hall coefficient (R_H) and derived data calculated for each temperature: columns = ['Temp (K)', 'HallCoeff_A (m3/C)', 'R^2(B)_A', 'HallCoeff_B (m3/C)','R^2(B)_B', 'HallCoeff_Avg (m3/C)','R^2(B)_Avg', 'n (cm^-3)', 'n_Error (cm^-3)', 'Mobility (cm^2/Vs)', 'Mobility_Error (cm^2/Vs)']
     hall_coefficient_df: pd.DataFrame = None #Hall coefficient (R_H) and derived data calculated for each temperature in a pandas dataframe
     
+    # Fitted Data
+    res_data_fit: np.ndarray = None #Fitted resistivity data (rho_xx): duplicate of measured data, with relevant colums changed to keep shape: columns = ['Temp (K)', 'Field (T)', 'rho_xx_A (Ohm.m)', 'rho_xx_B (Ohm.m)','rho_xx_average (Ohm.m)', 'rho_error (Ohm.m)']
+    #hall_data_fit: np.ndarray = None #Fitted Hall resistivity data (rho_xy) duplicate of measured data, with relevant colums changed to keep shape: columns = ['Temp (K)', 'Field (T)', 'rho_xy_A (Ohm.m)', 'R^2(I-V)_A', 'rho_xy_B (Ohm.m)','R^2(I-V)_B', 'rho_xy_average (Ohm.m)']
+    hall_coefficient_fit: np.ndarray = None #Fitted Hall data, duplicate of measured data, with relevant colums changed to keep shape: columns = ['Temp (K)', 'HallCoeff_A (m3/C)', 'R^2(B)_A', 'HallCoeff_B (m3/C)','R^2(B)_B', 'HallCoeff_Avg (m3/C)','R^2(B)_Avg', 'n (cm^-3)', 'n_Error (cm^-3)', 'Mobility (cm^2/Vs)', 'Mobility_Error (cm^2/Vs)']
+    
+    # File and directory parameters
     directory: str = None #directory to save the output files to
     filename: str = None #filename of the data
     film_thickness: float = None  #thickness of the film in meters - set to 1 as default, if set to 1 then you are calculating sheet resistance not resistivity
     material: str = None #material of the film
     plot_str: str = None #strings to be used at the start of the figure file name, including the sample code
     sample_code: str = None # Sample code to identify the sample
+    
+    # Measurement parameters
     measurement_type: str = 'VDP' #measurement type to identify the measurement type as VDP (Van der Pauw Geometry) or HallBar (Hall Bar Geometry)
     hb_dimensions: tuple = None # dimensions of the Hall Bar in um: (width of channel, length between voltage arms)
+    rotator: bool = False #If True, rotator used, theta angle is stored in the V_source column and used to calculate the field strength
 
 def import_ppms_data(
     path, #path to the directory containing the PPMS data
     film_thickness = 1.0, #thickness of the film in meters - set to 1 as default, if set to 1 then you are calculating sheet resistance not resistivity
     material = 'NA', #materials of the thin film stack
     sample_code = 'NA', #strings to be used at the start of the figure file name, including the sample code
-    V_inv = False, #invert the sense voltage in case the cables were switched during the measurement (for HC011)
+    V_inv: bool = False, #invert the sense voltage in case the cables were switched during the measurement (for HC011)
     measurement_type: str = 'VDP', #measurement type to identify the measurement type as 'VDP' or 'HallBar'
-    hb_dimensions: tuple = None # Hall bar dimensions in um (width, length_between_arms), required if measurement_type='HallBar'
+    hb_dimensions: tuple = None, # Hall bar dimensions in um (width, length_between_arms), required if measurement_type='HallBar'
+    
     ):
     '''
     This function imports the data from the PPMS instrument.
@@ -57,6 +70,21 @@ def import_ppms_data(
     files.sort()
     # Loop over all files in the directory extracting the data as a df, converting it to a numpy array, and slicing it to separete index values into a third dimension
     for count, fi in enumerate(files):  
+        
+        
+        # --- Determine if rotator was used by checking headers ---
+        rotator = False # Default to False
+        try:
+            # Read the header row (row 5, which is skiprows=4 since it's 0-indexed)
+            header_df = pd.read_csv(path.joinpath(fi), sep='\t', skiprows=4, nrows=1, comment='N')
+            # Check if 'Angle (deg)' is present in any column header
+            if any('Angle (deg)' in col for col in header_df.columns):
+                rotator = True
+                print(f"Rotator detected in file: {fi.name}")
+        except Exception as e:
+            print(f"Could not read headers to check for rotator in file: {fi}, {e}")
+        # --- End rotator check ---
+        
                     
         # Import the file, treating lines with non-numeric data as comments
         try:
@@ -71,6 +99,9 @@ def import_ppms_data(
         except Exception as e:
             print(f"Error with file: {fi}, {e}")
             continue
+        
+    
+        
 
         # Assign headers to columns
         ppms_df.columns = ['Temp (K)', 'Field', 'Source (A)', 'Source (V)', 'Sense (V)', 'index']
@@ -82,6 +113,16 @@ def import_ppms_data(
         ppms_df['Source (V)'] = pd.to_numeric(ppms_df['Source (V)'], errors='coerce')
         ppms_df['Sense (V)'] = pd.to_numeric(ppms_df['Sense (V)'], errors='coerce')
         ppms_df['index'] = pd.to_numeric(ppms_df['index'], downcast='integer', errors='coerce')
+        
+        # If the sample holder is rotated in the field, the theta angle is stored in the 'Source (V)' column
+        # The field component perpendicular to the sample surface is then calculated using the theta angle
+        if rotator == True:
+            # Rename the 'Source (V)' column to 'Theta (degrees)' and re-write the field column using the theta angle to get the perpendicular field
+            ppms_df.rename(columns={'Source (V)': 'Theta (degrees)'}, inplace=True)
+            # Convert the theta angle from degrees to radians
+            ppms_df['Theta (degrees)'] = np.deg2rad(ppms_df['Theta (degrees)'])
+            # Calculate the field using the theta angle
+            ppms_df['Field'] = (ppms_df['Field'] * np.cos(ppms_df['Theta (degrees)']))
     
         if V_inv == True:
             # Multiply the 'Sense (V)' column by -1 for only HC011 as the cables were switched the wrong way around
@@ -145,7 +186,8 @@ def import_ppms_data(
             plot_str = fi.stem, # Use fi.stem for filename without extension
             sample_code = sample_code,
             measurement_type = measurement_type,
-            hb_dimensions = hb_dimensions # Store dimensions if HallBar
+            hb_dimensions = hb_dimensions, # Store dimensions if HallBar
+            rotator = rotator # Whether the rotator was used
             ))
         
         # Print the filenames of the imported data to check they are correct along with the shape of the numpy array
@@ -163,7 +205,19 @@ def import_all_datasets():
         list: A list of PPMSData objects containing all imported datasets.
         all_directories: A list of directories where the datasets are stored which is used for both VDP and HallBar datasets but the type is specified
         There are separate output lists for VDP and HallBar datasets so they can have different processing functions applied to them
-        measurement_type: A string indicating the type of measurement ('VDP' or 'HallBar')
+        
+        'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/VDP_SR002_M_WO3_SiO2_Si/Data/',
+        'film_thickness': 20e-9,
+        'material': '$WO_3/SiO_2/Si$',
+        'sample_code': 'SR002_M',
+        'V_inv': False,
+        'notes': 'medium hydrogen concentration annealed sample'
+        'measurement_type' = ('VDP' or 'HallBar'): A string indicating the type of measurement 
+        'hb_dimensions' = (width of channel, length between voltage arms): dimensions of the Hall Bar in um - set to None by default
+        'rotator' = True or False: A boolean indicating if the rotator was used in the measurement
+                    If rotator is True then the theta angle is stored in the V_source column and used to calculate the field strength
+                    This can be done as the rotator is only ever used with the K6221 which doesn't have a source voltage output
+       
     """
     all_directories = []
     dat_raw_vdp = []
@@ -350,6 +404,16 @@ def import_all_datasets():
             'V_inv': False,
             'notes': 'medium hydrogen concentration annealed sample'
         },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/HallBar1_DV127_WO3_YAO/Data/',
+            'film_thickness': 140e-9,
+            'material': '$WO_3/YAlO_3/STO$',
+            'sample_code': 'DV127',
+            'V_inv': False,
+            'measurement_type': 'HallBar',
+            'hb_dimensions': (30, 100),  # width of channel, length between voltage arms in um
+            'notes': 'processed into hall bar to look at disparity between different directions'
+        },
         
     ]
     
@@ -360,10 +424,15 @@ def import_all_datasets():
         
         # Extract V_inv parameter if it exists, otherwise default to False
         v_inv = dataset.get('V_inv', False)
+        
         # Extract the measurement type if it exists, otherwise default to 'VDP'
         measurement_type = dataset.get('measurement_type', 'VDP')
+        
         # Extract Hall bar dimensions if measurement_type is 'HallBar'
         hb_dimensions = dataset.get('hb_dimensions', None) if measurement_type == 'HallBar' else None
+        
+  
+    
 
         
         if measurement_type == 'VDP':
@@ -374,8 +443,9 @@ def import_all_datasets():
                 material=dataset['material'],
                 sample_code=dataset['sample_code'],
                 V_inv=v_inv,
-                measurement_type=measurement_type
+                measurement_type=measurement_type,
                 # No hb_dimensions needed for VDP
+
             ))
             
         elif measurement_type == 'HallBar':
@@ -393,6 +463,7 @@ def import_all_datasets():
                 V_inv=v_inv,
                 measurement_type=measurement_type,
                 hb_dimensions=hb_dimensions # Pass the dimensions here
+
             ))
 
     
@@ -400,13 +471,3 @@ def import_all_datasets():
     return dat_raw_vdp, dat_raw_hb
 
 
-# {
-#             'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/HallBar_DV127_WO3_YAO_STO/Data/',
-#             'film_thickness': 140e-9,
-#             'material': '$WO_3/YAlO_3/STO$',
-#             'sample_code': 'DV127',
-#             'V_inv': False,
-#             'measurement_type': 'HallBar',
-#             'hb_dimensions': (30, 100),  # width of channel, length between voltage arms in um
-#             'notes': 'processed into hall bar to look at disparity between different directions'
-#         },
