@@ -125,7 +125,7 @@ def vdp_resistivity(
                     resistivity_error = R_sheet_error*film_thickness # if the film thickness is 1 then this is the error in the sheet resistance
                     
                     #### Step 5: Insert the new row to the np data array using tf_av for temperature and field values that are averaged over all the currents
-                    res_data[Ti,Bi,:] = [tf_av[Ti,Bi,0], tf_av[Ti,Bi,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness, resistivity_error]
+                    res_data[Ti,Bi,:-1] = [tf_av[Ti,Bi,0], tf_av[Ti,Bi,1], R_sheet_A*film_thickness, R_sheet_B*film_thickness,R_sheet*film_thickness, resistivity_error]
 
                 # Option to filter the resistivity vs field data
                 if filt_kern != 0 or filt_sigma != 0 or threshold != 0:
@@ -133,7 +133,7 @@ def vdp_resistivity(
                 
                 
             # Flatten the res_data array to a 2D array so it can be put into a df for debugging
-            res_data_flat = res_data.reshape((ctf[4]*ctf[5],6))  
+            res_data_flat = res_data.reshape((ctf[4]*ctf[5],7))  
             # Convert the numpy array to a pandas dataframe 
             res_data_df = pd.DataFrame(res_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)', 'rho_error(ohm.m)', 'rho_fit(ohm.m)'])
             
@@ -247,7 +247,7 @@ def vdp_hall(
                 # Average the temperatures over all field values to get a measurement average temperature
                 average_temperature = np.sum(tf_av[Ti,:,0], axis=0)/tf_av.shape[1] 
                 
-                hall_coefficient[Ti,:] = [average_temperature, HC_13_42[0], HC_13_42[2], HC_24_31[0],HC_24_31[2],HC_av[0],HC_av[2], cc_density, cc_density_error, mobility, mobility_error]
+                hall_coefficient[Ti,:-2] = [average_temperature, HC_13_42[0], HC_13_42[2], HC_24_31[0],HC_24_31[2],HC_av[0],HC_av[2], cc_density, cc_density_error, mobility, mobility_error]
                 
             # Flatten the hall_data array to a 2D array so it can be put into a df for debugging
             hall_data_flat = np.copy(hall_data).reshape((ctf[4]*ctf[5],7))

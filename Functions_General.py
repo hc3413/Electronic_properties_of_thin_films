@@ -297,7 +297,16 @@ def magnetoresistance(PPMS_files, exclude_res=False):
         # Shape (ctf[4], ctf[5], 4) (temperature, field, columns)
         mag_res = np.zeros((ctf[4], ctf[5], 5)) # Columns: MR_A, MR_B, MR_avg, MR_avg_error, MR_fitted
         
-        zero_field_index = int(ctf[5] / 2)  # Middle (zero) index
+        #If the rotation is used, we need to manually search for the zero field point
+        if ppms.rotator == True:
+            # Find the index of the zero field point
+            zero_field_index = np.where(np.round(res_data[:, :, 1], decimals=0) == 0)[1][0]
+            print(f'Zero field index for {ppms.filename}: {zero_field_index}')
+            print(f'Zero field value for {ppms.filename}: {res_data[0, zero_field_index, 1]}')
+        
+        # Otherwise the zero field point is always in the middle
+        else:
+            zero_field_index = int(ctf[5] / 2)  # Middle (zero) index
 
         for Ti in range(ctf[4]):
             for Bi in range(ctf[5]):

@@ -119,7 +119,7 @@ def import_ppms_data(
             # Rename the 'Source (V)' column to 'Theta (degrees)' and re-write the field column using the theta angle to get the perpendicular field
             ppms_df.rename(columns={'Source (V)': 'Theta (degrees)'}, inplace=True)
             # Convert the theta angle from degrees to radians
-            ppms_df['Theta (degrees)'] = np.deg2rad(ppms_df['Theta (degrees)'])
+            ppms_df['Theta (degrees)'] = np.deg2rad(ppms_df['Theta (degrees)']-5)
             # Calculate the field using the theta angle
             ppms_df['Field'] = (ppms_df['Field'] * np.cos(ppms_df['Theta (degrees)']))
     
@@ -407,11 +407,21 @@ def import_all_datasets():
             'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/HallBar1_DV127_WO3_YAO/Data/',
             'film_thickness': 140e-9,
             'material': '$WO_3/YAlO_3/STO$',
-            'sample_code': 'DV127',
+            'sample_code': 'DV127HB1',
             'V_inv': False,
             'measurement_type': 'HallBar',
             'hb_dimensions': (30, 100),  # width of channel, length between voltage arms in um
             'notes': 'processed into hall bar to look at disparity between different directions'
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/HallBar4_DV127_WO3_YAO/Data/',
+            'film_thickness': 140e-9,
+            'material': '$WO_3/YAlO_3/STO$',
+            'sample_code': 'DV127HB4',
+            'V_inv': False,
+            'measurement_type': 'HallBar',
+            'hb_dimensions': (30, 100),  # width of channel, length between voltage arms in um
+            'notes': 'processed into hall bar to look at disparity between different directions - this sample has some damage to the electrodes where the wirebonding was done'
         },
         
     ]

@@ -97,7 +97,7 @@ def hallbar_resistivity(
                     
                     #### Step 6: Insert the new row to the np data array using tf_av for temperature and field values that are averaged over all the currents
                     # Store bulk resistivity (rho_xx) values in Ohm.m
-                    res_data[Ti,Bi,:] = [tf_av[Ti,Bi,0], tf_av[Ti,Bi,1], rho_A, rho_B, rho_average, rho_average_error]
+                    res_data[Ti,Bi,:-1] = [tf_av[Ti,Bi,0], tf_av[Ti,Bi,1], rho_A, rho_B, rho_average, rho_average_error]
 
                 # Option to filter the resistivity vs field data
                 if filt_kern != 0 or filt_sigma != 0 or threshold != 0:
@@ -106,7 +106,7 @@ def hallbar_resistivity(
                 
                 
             # Flatten the res_data array to a 2D array so it can be put into a df for debugging
-            res_data_flat = res_data.reshape((ctf[4]*ctf[5],6))  
+            res_data_flat = res_data.reshape((ctf[4]*ctf[5],7))  
             # Convert the numpy array to a pandas dataframe 
             res_data_df = pd.DataFrame(res_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (Ohm.m)', 'rho_xx_B (Ohm.m)','rho_xx_average (Ohm.m)', 'rho_error (Ohm.m)', 'rho_fit (Ohm.m)'])
             
@@ -242,7 +242,7 @@ def hallbar_hall(
                 average_temperature = np.mean(tf_av[Ti,:,0], axis=0) 
                 
                 # Store: Temp, R_H_A, R^2(B)_A, R_H_B, R^2(B)_B, R_H_av, R^2(B)_av, n, dn, mu, dmu
-                hall_coefficient[Ti,:] = [
+                hall_coefficient[Ti,:-2] = [
                     average_temperature, 
                     Hall_Coeff_A, HC_A_fit.rvalue**2, 
                     Hall_Coeff_B, HC_B_fit.rvalue**2, 
