@@ -119,7 +119,7 @@ def import_ppms_data(
             # Rename the 'Source (V)' column to 'Theta (degrees)' and re-write the field column using the theta angle to get the perpendicular field
             ppms_df.rename(columns={'Source (V)': 'Theta (degrees)'}, inplace=True)
             # Convert the theta angle from degrees to radians
-            ppms_df['Theta (degrees)'] = np.deg2rad(ppms_df['Theta (degrees)']-5)
+            ppms_df['Theta (degrees)'] = np.deg2rad(ppms_df['Theta (degrees)'])
             # Calculate the field using the theta angle
             ppms_df['Field'] = (ppms_df['Field'] * np.cos(ppms_df['Theta (degrees)']))
     
@@ -423,7 +423,38 @@ def import_all_datasets():
             'hb_dimensions': (30, 100),  # width of channel, length between voltage arms in um
             'notes': 'processed into hall bar to look at disparity between different directions - this sample has some damage to the electrodes where the wirebonding was done'
         },
-        
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/VDP_HC017_BSO_LSO_SSO_STO/Data/',
+            'film_thickness': 1,
+            'material': '$BaSnO_3/LaScO_3/La:SrSnO_3/SrTiO_3$',
+            'sample_code': 'HC017',
+            'V_inv': False,
+            'notes': 'low oxygen growth pressure 0.01 for BSO'
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/VDP_HC018_BSO_LSO_SSO_STO/Data/',
+            'film_thickness': 1,
+            'material': '$BaSnO_3/LaScO_3/La:SrSnO_3/SrTiO_3$',
+            'sample_code': 'HC018',
+            'V_inv': False,
+            'notes': 'high oxygen growth pressure 0.13 for BSO'
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/VDP_HP05_MoS2/Data/',
+            'film_thickness': 2.5e-3,
+            'material': '$MoS_2$',
+            'sample_code': 'HP05',
+            'V_inv': False,
+            'notes': 'first Xin sample of MoS2 testing with silver paste contacts which were wirebonded on to and using quartz to mount it thermally'
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/VDP_YL196_ZO_STO/Data/',
+            'film_thickness': 1,
+            'material': '$ZrO_2/STO$',
+            'sample_code': 'YL196',
+            'V_inv': False,
+            'notes': '2DEG at STO interface at low T?'
+        },
     ]
     
     # Import each dataset

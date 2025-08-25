@@ -86,7 +86,7 @@ def vdp_resistivity(
                     ### Initial guess for rho_sheet based off an approximate scaling factor from source I, sense V data
                     if resistivity_guess == 0:
                         R_to_rho_scaling =  4 #scaling factor 
-                        initial_guess = R_32_10[0]* R_to_rho_scaling 
+                        initial_guess = np.abs(R_32_10[0]* R_to_rho_scaling)
                     else:
                         # Use the user defined initial guess
                         initial_guess = resistivity_guess

@@ -218,6 +218,16 @@ def extract_ctf(
             field_unique = field_unique_reordered
             field_no = field_no_reordered # Update field_no for ctf
             
+        # Case for field values in the order 0, -Hmax -> Hmax -> -Hmax
+        elif (field_no > 3 and # Ensure enough points for this pattern
+              np.round(field_unique[0], decimals=0) == 0 and
+              np.round(field_unique[1], decimals=0) == np.round(np.min(field_unique), decimals=0) and
+              np.round(field_unique[-1], decimals=0) == np.round(np.min(field_unique), decimals=0) and
+              1 < np.argmax(field_unique) < field_no - 1): # Max field is not at the start or end after initial 0
+            print(f'{ppms.filename}: Field values in order 0, -Hmax -> Hmax -> -Hmax. No reordering applied.')
+            data_out = data_out_nd # No reordering needed for this specific pattern
+            # field_unique and field_no remain as originally determined
+
         else:
             print(f'Warning for {ppms.filename}: no recognised field order for reordering was applied.')
             print(f'Field values start/mid/end: {field_unique[0] if field_no > 0 else "N/A"}, {field_unique[int(field_no/2)] if field_no > 1 else "N/A"}, {field_unique[-1] if field_no > 0 else "N/A"}')
