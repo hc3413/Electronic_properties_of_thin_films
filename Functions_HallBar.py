@@ -3,6 +3,86 @@ from import_dep import * # Import Dependencies
 from Class_Import import * # Import the data storage class
 from Functions_General import * # Import the general functions used to process the data
 
+"""
+HALL BAR ELECTRICAL TRANSPORT ANALYSIS METHODS
+
+This module implements a comprehensive two-stage linear regression analysis for Hall bar 
+measurements to extract resistivity, Hall coefficient, carrier density, and mobility 
+from temperature- and field-dependent electrical transport data. At each temperature 
+point, linear sweeps of both current and magnetic field are performed: current is 
+swept at fixed field values to measure I-V characteristics, then the field is swept 
+to capture the magnetic field dependence of transport properties. This dual-sweep 
+methodology enables systematic elimination of voltage offsets and field-dependent 
+artifacts through sequential linear regression analysis, ensuring accurate extraction 
+of intrinsic electronic transport parameters.
+
+MEASUREMENT GEOMETRY:
+Hall bar devices have a rectangular geometry with current flowing longitudinally between 
+source/drain contacts and voltage measured both parallel (resistivity) and perpendicular 
+(Hall effect) to the current flow. Two symmetric measurement configurations (A and B) 
+are used on opposite sides of the Hall bar for redundancy and error assessment.
+
+ANALYSIS METHODOLOGY:
+
+1. RESISTIVITY ANALYSIS (hallbar_resistivity function):
+   
+   a) First-stage linear regression (I-V characteristics):
+      - For each temperature and magnetic field, current is swept linearly
+      - Linear regression of voltage vs. current: V = R×I + V₀
+      - The slope R gives the resistance, eliminating voltage offsets (V₀)
+      - This removes systematic errors from contact resistances, thermoelectric 
+        voltages, and amplifier offsets
+      - R² values are stored to assess linearity and data quality
+   
+   b) Geometric correction and averaging:
+      - Sheet resistance: R_sheet = R × (width/length)
+      - Bulk resistivity: ρ_xx = R_sheet × thickness
+      - Results from configurations A and B are averaged
+      - Error propagation accounts for fitting uncertainties
+   
+   c) Optional filtering:
+      - Median filtering removes sporadic outliers
+      - Gaussian smoothing reduces high-frequency noise
+      - Z-score outlier detection eliminates anomalous data points
+
+2. HALL EFFECT ANALYSIS (hallbar_hall function):
+   
+   a) First-stage linear regression (I-V_Hall characteristics):
+      - For each temperature and field, Hall voltage vs. current is fit linearly
+      - Slope gives Hall resistance R_H = V_Hall/I
+      - Eliminates voltage offsets and contact-related artifacts
+      - Hall resistivity: ρ_xy = R_H × thickness
+   
+   b) Second-stage linear regression (ρ_xy vs. B):
+      - At each temperature, ρ_xy is plotted vs. magnetic field B
+      - Linear regression: ρ_xy = R_H×B + ρ_xy₀
+      - Slope R_H is the Hall coefficient
+      - Intercept ρ_xy₀ removes field-independent offsets (mixed-up contacts, 
+        misalignment, or planar Hall effects)
+      - This dual-regression approach ensures accurate Hall coefficient extraction
+   
+   c) Transport parameter calculation:
+      - Carrier density: n = 1/(R_H × e) where e is elementary charge
+      - Mobility: μ = R_H/ρ_xx using zero-field resistivity
+      - Full error propagation from both regression stages
+   
+   d) Configuration averaging:
+      - Results from Hall bar arms A and B are averaged
+      - Reduces asymmetry effects and contact-specific errors
+
+ADVANTAGES OF THIS DUAL-REGRESSION APPROACH:
+
+1. Voltage offset elimination: Both I-V and ρ_xy-B fits remove additive constants
+2. Contact resistance immunity: Linear I-V fitting negates series resistances
+3. Systematic error reduction: Field-dependent offsets removed by B-field regression  
+4. Statistical robustness: Multiple configurations and regression stages reduce uncertainty
+5. Data quality assessment: R² values from both stages indicate measurement reliability
+6. Artifact identification: Non-linear I-V or ρ_xy-B behavior reveals sample/contact issues
+
+This methodology ensures accurate extraction of intrinsic electronic transport properties 
+while minimizing experimental artifacts common in Hall effect measurements.
+"""
+
 ### ----------- Functions for extraction and analysis of Hall Bar data ----------- ###
  
     

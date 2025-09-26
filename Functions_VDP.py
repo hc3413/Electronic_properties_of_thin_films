@@ -41,11 +41,73 @@ def vdp_resistivity(
     filt_sigma = 0, # gaussian filter sigma, if set to 0 then no filter is applied
     threshold = 0 # z-score threshold for outlier detection, if set to 0 then no filter is applied, (lower threshold means more points are considered outliers (2 is typical value))
     ):
-    '''Calculates the resistivity of a thin film sample using the Van der Pauw method.
-    The measurments for this were done in index values of 2,3,4,5 
-    Each index value corresponds to a different configuration of the source and sense leads.
-    These 4 index configurations are split into 2 pairs of configurations, with each pair being able to generate the resistivity of the film independantly.
-    Four configurations were used for robustness, to enable a comparison of the resistivity values obtained with the source/sense positions swapped.
+    '''
+    Van der Pauw Resistivity Analysis using Four-Configuration Method
+    
+    This function implements the Van der Pauw method for measuring sheet resistivity of thin films
+    using four-point probe measurements on arbitrarily shaped samples with electrical contacts
+    at the periphery of the sample.
+    
+    METHODOLOGY:
+    
+    The Van der Pauw method uses four electrical contacts placed at the periphery of a flat
+    sample. The method works by measuring resistance between different pairs of contacts
+    and solving the Van der Pauw equation to determine the sheet resistivity.
+    
+    Four-Configuration Measurement (indices 2,3,4,5 in PPMS data):
+    - Configuration 2: Source current between contacts 3-2, measure voltage between 1-0
+    - Configuration 3: Source current between contacts 2-0, measure voltage between 3-1  
+    - Configuration 4: Source current between contacts 0-1, measure voltage between 2-3
+    - Configuration 5: Source current between contacts 1-3, measure voltage between 0-2
+    
+    The configurations are grouped into two orthogonal pairs:
+    - Pair A: R_32_10 and R_20_31 (perpendicular current/voltage directions)
+    - Pair B: R_01_23 and R_13_02 (perpendicular current/voltage directions)
+    
+    Van der Pauw Equation:
+    exp(-π*R_A/R_s) + exp(-π*R_B/R_s) = 1
+    
+    Where R_A and R_B are the measured resistances from each configuration pair,
+    and R_s is the sheet resistance to be determined.
+    
+    ANALYSIS STEPS:
+    
+    1. Linear Regression: For each temperature/field point, perform linear regression
+       on current-voltage data for all four configurations to extract resistances
+       with R² values for quality assessment.
+    
+    2. Van der Pauw Solution: Solve the transcendental Van der Pauw equation
+       numerically using fsolve for both configuration pairs to get R_sheet_A
+       and R_sheet_B independently.
+    
+    3. Error Propagation: Calculate uncertainties in sheet resistivity using
+       error propagation from the linear regression uncertainties in resistance
+       measurements through the Van der Pauw equation derivatives.
+    
+    4. Averaging: Average the two sheet resistivity solutions (R_sheet_A and R_sheet_B)
+       to get final result with propagated uncertainty.
+    
+    5. Volume Resistivity: Convert sheet resistivity to volume resistivity by
+       multiplying by film thickness: ρ = R_sheet × t
+    
+    ADVANTAGES:
+    - Works with arbitrarily shaped samples
+    - Self-consistent through multiple measurement configurations
+    - Robust against contact placement variations
+    - Provides uncertainty quantification
+    - Temperature and magnetic field dependent measurements
+    
+    QUALITY CONTROL:
+    - R² values from linear regression assess measurement linearity
+    - Comparison between R_sheet_A and R_sheet_B indicates measurement consistency
+    - Optional filtering for outlier removal and noise reduction
+    
+    OUTPUT:
+    For each temperature/field point:
+    - Temperature (K), Magnetic Field (T)
+    - ρ_xx_A, ρ_xx_B: Volume resistivities from each configuration pair
+    - ρ_xx_average: Final averaged volume resistivity
+    - ρ_error: Propagated uncertainty in resistivity
     '''
     
     for ppms in PPMS_files:
@@ -158,11 +220,80 @@ def vdp_hall(
     filt_sigma = 0, # gaussian filter sigma, if set to 0 then no filter is applied
     threshold = 0 # z-score threshold for outlier detection, if set to 0 then no filter is applied, (lower threshold means more points are considered outliers (2 is typical value))             
     ):
-    '''Calculates the Hall resistivity at every temperature and field strength
-    Uses linear regression on the current-voltage data to obtain the Hall resistivity
-    The Hall resistivity is calculated for each configuration of the source and sense leads and the two are averaged
-    Though caution is needed on this average as the Hall resistivity is a vector quantity and the two configurations may not be identical
-    (rho_xy = thickness*V(hall)/I(source))'''
+    '''
+    Van der Pauw Hall Effect Analysis for Thin Films
+    
+    This function implements Hall effect measurements using the Van der Pauw geometry to
+    determine Hall coefficient, charge carrier density, and mobility in thin films.
+    
+    METHODOLOGY:
+    
+    Hall Effect Principle:
+    When a current flows through a conductor in the presence of a perpendicular magnetic
+    field, charge carriers experience a Lorentz force that creates a transverse voltage
+    (Hall voltage) proportional to the applied magnetic field.
+    
+    Van der Pauw Hall Configurations:
+    Uses two complementary measurement configurations on the same four-contact sample:
+    - Configuration A: Current between contacts 1-3, measure voltage between 4-2
+    - Configuration B: Current between contacts 2-4, measure voltage between 3-1
+    
+    The two configurations provide independent measurements that are averaged for
+    improved accuracy and to assess measurement consistency.
+    
+    ANALYSIS STEPS:
+    
+    1. Hall Resistivity Extraction: For each temperature and magnetic field point,
+       perform linear regression on current-voltage data to extract Hall resistance
+       for both configurations. Convert to Hall resistivity: ρ_xy = R_Hall × thickness
+    
+    2. Hall Coefficient Calculation: At each temperature, perform linear regression
+       of Hall resistivity vs magnetic field to extract Hall coefficient:
+       ρ_xy = R_H × B, where R_H is the Hall coefficient
+    
+    3. Charge Carrier Density: Calculate using the single-band model:
+       n = 1/(R_H × e), where e is elementary charge
+       Convert to cm⁻² units for 2D systems
+    
+    4. Mobility Calculation: Determine from Hall coefficient and zero-field resistivity:
+       μ = R_H/ρ_xx, where ρ_xx is the longitudinal resistivity at B=0
+       Convert to cm²/V·s units
+    
+    5. Error Propagation: Calculate uncertainties for all derived quantities using
+       standard error propagation from linear regression uncertainties
+    
+    PHYSICAL INTERPRETATION:
+    
+    - Hall Coefficient Sign: Positive for hole-dominated transport, negative for electrons
+    - Temperature Dependence: Reveals carrier freeze-out, thermal activation, or
+      multiple carrier types
+    - Magnetic Field Linearity: Validates single-carrier model; deviations indicate
+      multi-carrier transport or quantum effects
+    
+    QUALITY CONTROL:
+    - R² values assess linearity of I-V and ρ_xy-B relationships
+    - Configuration A vs B comparison checks measurement consistency
+    - Optional filtering removes outliers and reduces noise
+    
+    LIMITATIONS:
+    - Single-band model: May not apply to multi-carrier systems
+    - Hall factor assumed to be 1 (exact for free electrons, approximation for others)
+    - Temperature-dependent scattering may affect interpretation
+    
+    OUTPUT:
+    Hall Data (for each T, B point):
+    - Temperature (K), Magnetic Field (T)
+    - ρ_xy_A, ρ_xy_B: Hall resistivities from each configuration
+    - ρ_xy_average: Final averaged Hall resistivity
+    - R² values for quality assessment
+    
+    Hall Coefficient Data (for each temperature):
+    - Temperature (K)
+    - Hall coefficients from configurations A, B, and average
+    - Charge carrier density (cm⁻²) with uncertainty
+    - Mobility (cm²/V·s) with uncertainty
+    - R² values for ρ_xy vs B fits
+    '''
     #ctf = [current_unique, temp_unique, field_unique, current_no, temp_no, field_no]
     
     for ppms in PPMS_files:
