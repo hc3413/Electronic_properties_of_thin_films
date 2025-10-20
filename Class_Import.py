@@ -455,6 +455,14 @@ def import_all_datasets():
             'V_inv': False,
             'notes': '2DEG at STO interface at low T?'
         },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/YC001/Data/',
+            'film_thickness': 30e-9,
+            'material': '$LSMO/STO$',
+            'sample_code': 'YC001',
+            'V_inv': False,
+            'notes': 'something'
+        },
     ]
     
     # Import each dataset
