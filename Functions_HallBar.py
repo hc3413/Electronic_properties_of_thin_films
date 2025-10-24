@@ -92,7 +92,8 @@ def hallbar_resistivity(
     print_val = False, # print the initial guess vs calculated resistivity
     filt_kern = 0, # median filter kernel size, if set to 0 then no filter is applied
     filt_sigma = 0, # gaussian filter sigma, if set to 0 then no filter is applied
-    threshold = 0 # z-score threshold for outlier detection, if set to 0 then no filter is applied, (lower threshold means more points are considered outliers (2 is typical value))
+    threshold = 0, # z-score threshold for outlier detection on resistivity vs field data, if set to 0 then no filter is applied, (lower threshold means more points are considered outliers (2 is typical value))
+    threshold_current = 0 # z-score threshold for outlier detection on current-voltage data, if set to 0 then no filter is applied
     ):
     '''Calculates the bulk resistivity (rho_xx) of a thin film sample which has been processed into a Hall bar geometry.
     It first calculates the sheet resistance (R_sheet = R * w/l) and then multiplies by thickness (rho_xx = R_sheet * t).
@@ -128,11 +129,17 @@ def hallbar_resistivity(
                     ##### Step 1: Using linear regression on the current-voltage data to get resistance R = V/I
                     # R_ij_kl contains: slope(resistance), intercept, R-squared value, p-value, stderr
 
-                    # First pair of Hall bar arms parallel to the current
-                    R_A_fit = linregress(data_np_nd[Ti,Bi,:,2,0], data_np_nd[Ti,Bi,:,4,0])    
+                    # Filter I-V data if threshold_current is specified
+                    # Hall bar arm A
+                    I_filt_A, V_filt_A = filter_IV_data(data_np_nd[Ti,Bi,:,2,0], data_np_nd[Ti,Bi,:,4,0], threshold_current)
+                    # Hall bar arm B
+                    I_filt_B, V_filt_B = filter_IV_data(data_np_nd[Ti,Bi,:,2,1], data_np_nd[Ti,Bi,:,4,1], threshold_current)
                     
+                    # Perform linear regression on filtered data
+                    # First pair of Hall bar arms parallel to the current
+                    R_A_fit = linregress(I_filt_A, V_filt_A)    
                     #Second pair of Hall bar arms parallel to the current
-                    R_B_fit = linregress(data_np_nd[Ti,Bi,:,2,1], data_np_nd[Ti,Bi,:,4,1])
+                    R_B_fit = linregress(I_filt_B, V_filt_B)
 
 
                     # Append the R-squared value to the list
@@ -205,7 +212,8 @@ def hallbar_hall(
     PPMS_files, # list of PPMSData objects
     filt_kern = 0, # median filter kernel size, if set to 0 then no filter is applied
     filt_sigma = 0, # gaussian filter sigma, if set to 0 then no filter is applied
-    threshold = 0 # z-score threshold for outlier detection, if set to 0 then no filter is applied, (lower threshold means more points are considered outliers (2 is typical value))             
+    threshold = 0, # z-score threshold for outlier detection on Hall resistivity vs field data, if set to 0 then no filter is applied, (lower threshold means more points are considered outliers (2 is typical value))
+    threshold_current = 0 # z-score threshold for outlier detection on current-voltage data, if set to 0 then no filter is applied
     ):
     '''Calculates the Hall resistivity (rho_xy) at every temperature and field strength.
     Uses linear regression on the current-voltage data to obtain the Hall resistance (R_Hall = V_H / I).
@@ -241,10 +249,17 @@ def hallbar_hall(
                     #### Step 1: Use linear regression on the current-voltage data to obtain the Hall resistance (R_Hall = V_H / I) at each field
                     # R_fit[0] = the slope(Hall resistance), R_fit[1] = intercept, R_fit[2] = R-value (correlation coefficient)     
                     
+                    # Filter I-V data if threshold_current is specified
+                    # Hall configuration A (index 2)
+                    I_filt_A, V_filt_A = filter_IV_data(data_np_nd[Ti,Bi,:,2,2], data_np_nd[Ti,Bi,:,4,2], threshold_current)
+                    # Hall configuration B (index 3)
+                    I_filt_B, V_filt_B = filter_IV_data(data_np_nd[Ti,Bi,:,2,3], data_np_nd[Ti,Bi,:,4,3], threshold_current)
+                    
+                    # Perform linear regression on filtered data
                     # Hall Resistance in configuration A (using index 2)
-                    R_A_fit = linregress(data_np_nd[Ti,Bi,:,2,2], data_np_nd[Ti,Bi,:,4,2]) #Regression on (x,y) = (I_source, V_measured) 
+                    R_A_fit = linregress(I_filt_A, V_filt_A) #Regression on (x,y) = (I_source, V_measured) 
                     # Hall resistance in configuration B (using index 3)
-                    R_B_fit = linregress(data_np_nd[Ti,Bi,:,2,3], data_np_nd[Ti,Bi,:,4,3]) #Regression on (x,y) = (I_source, V_measured)
+                    R_B_fit = linregress(I_filt_B, V_filt_B) #Regression on (x,y) = (I_source, V_measured)
                     
                     # Average the two Hall resistances
                     R_hall_average = (R_A_fit.slope + R_B_fit.slope) / 2

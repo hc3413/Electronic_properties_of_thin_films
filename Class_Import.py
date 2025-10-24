@@ -31,8 +31,6 @@ class PPMSData:
     
     # Fitted Data
 
-
-
     # File and directory parameters
     directory: str = None #directory to save the output files to
     filename: str = None #filename of the data
@@ -461,7 +459,15 @@ def import_all_datasets():
             'material': '$LSMO/STO$',
             'sample_code': 'YC001',
             'V_inv': False,
-            'notes': 'something'
+            'notes': 'actually this is maybe YC003?, it was mislabelled at the time'
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/YC004/Data/',
+            'film_thickness': 30e-9,
+            'material': '$LSMO/STO$',
+            'sample_code': 'YC004',
+            'V_inv': False,
+            'notes': 'Au/Ti pads on LSMO/STO',
         },
     ]
     

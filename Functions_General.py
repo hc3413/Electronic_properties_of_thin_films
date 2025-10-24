@@ -400,3 +400,52 @@ def filter_data(raw_data, filt_kern = 0, filt_sigma = 0, threshold = 0):
         dat_filtered[outliers] = np.interp(np.flatnonzero(outliers), np.flatnonzero(~outliers), raw_data[~outliers])    
         return dat_filtered
 
+
+def filter_IV_data(I_data, V_data, threshold_current):
+    '''Filter current-voltage data pairs using z-score outlier detection.
+    
+    This function removes outlier points from I-V measurements before linear regression.
+    A data point is considered an outlier if EITHER the current OR voltage has a 
+    z-score exceeding the threshold. This ensures clean I-V data for resistance extraction.
+    
+    Parameters:
+    -----------
+    I_data : array-like
+        Current data array
+    V_data : array-like
+        Voltage data array
+    threshold_current : float
+        Z-score threshold for outlier detection. Typical values: 2-3
+        Points with |z-score| > threshold are removed
+        If 0, no filtering is applied
+    
+    Returns:
+    --------
+    I_filtered : array
+        Filtered current data with outliers removed
+    V_filtered : array
+        Filtered voltage data with outliers removed
+    
+    Example:
+    --------
+    I_clean, V_clean = filter_IV_data(I_measured, V_measured, threshold_current=2.5)
+    R_fit = linregress(I_clean, V_clean)
+    '''
+    
+    if threshold_current == 0:
+        # No filtering, return original data
+        return I_data, V_data
+    
+    # Calculate z-scores for both current and voltage
+    z_I = zscore(I_data)
+    z_V = zscore(V_data)
+    
+    # Create mask: keep points where BOTH current and voltage are within threshold
+    mask = (np.abs(z_V) < threshold_current) & (np.abs(z_I) < threshold_current)
+    
+    # Apply mask to filter data
+    I_filtered = I_data[mask]
+    V_filtered = V_data[mask]
+    
+    return I_filtered, V_filtered
+

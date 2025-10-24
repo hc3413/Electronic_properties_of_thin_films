@@ -39,7 +39,8 @@ def vdp_resistivity(
     resistivity_guess = 0, #initial guess for the sheet resistivity, if set to 0 then the initial guess is calculated from an approximation with scaling factor
     filt_kern = 0, # median filter kernel size, if set to 0 then no filter is applied
     filt_sigma = 0, # gaussian filter sigma, if set to 0 then no filter is applied
-    threshold = 0 # z-score threshold for outlier detection, if set to 0 then no filter is applied, (lower threshold means more points are considered outliers (2 is typical value))
+    threshold = 0, # z-score threshold for outlier detection on resistivity vs field data, if set to 0 then no filter is applied, (lower threshold means more points are considered outliers (2 is typical value))
+    threshold_current = 0 # z-score threshold for outlier detection on current-voltage data, if set to 0 then no filter is applied
     ):
     '''
     Van der Pauw Resistivity Analysis using Four-Configuration Method
@@ -135,12 +136,23 @@ def vdp_resistivity(
                     ##### Step 1: Using linear regression on the current-voltage data
                     #R_ij_kl[0] = the slope(resistance), R_ij_kl[1] = intercept, R_ij_kl[2] = R-squared value
 
+                    # Filter I-V data if threshold_current is specified
+                    # Configuration 2: R_32_10
+                    I_filt_2, V_filt_2 = filter_IV_data(data_np_nd[Ti,Bi,:,2,2], data_np_nd[Ti,Bi,:,4,2], threshold_current)
+                    # Configuration 3: R_20_31
+                    I_filt_3, V_filt_3 = filter_IV_data(data_np_nd[Ti,Bi,:,2,3], data_np_nd[Ti,Bi,:,4,3], threshold_current)
+                    # Configuration 4: R_01_23
+                    I_filt_4, V_filt_4 = filter_IV_data(data_np_nd[Ti,Bi,:,2,4], data_np_nd[Ti,Bi,:,4,4], threshold_current)
+                    # Configuration 5: R_13_02
+                    I_filt_5, V_filt_5 = filter_IV_data(data_np_nd[Ti,Bi,:,2,5], data_np_nd[Ti,Bi,:,4,5], threshold_current)
+                    
+                    # Perform linear regression on filtered data
                     #First pair of Van der Pauw configurations
-                    R_32_10 = linregress(data_np_nd[Ti,Bi,:,2,2], data_np_nd[Ti,Bi,:,4,2])    
-                    R_20_31 = linregress(data_np_nd[Ti,Bi,:,2,3], data_np_nd[Ti,Bi,:,4,3])
+                    R_32_10 = linregress(I_filt_2, V_filt_2)    
+                    R_20_31 = linregress(I_filt_3, V_filt_3)
                     #Second pair of Van der Pauw configurations
-                    R_01_23 = linregress(data_np_nd[Ti,Bi,:,2,4], data_np_nd[Ti,Bi,:,4,4])
-                    R_13_02 = linregress(data_np_nd[Ti,Bi,:,2,5], data_np_nd[Ti,Bi,:,4,5])
+                    R_01_23 = linregress(I_filt_4, V_filt_4)
+                    R_13_02 = linregress(I_filt_5, V_filt_5)
 
                     # Append the R-squared value to the list
                     R_squared.extend([R_32_10[2], R_20_31[2], R_01_23[2], R_13_02[2]])
@@ -218,7 +230,8 @@ def vdp_hall(
     PPMS_files, # list of PPMSData objects
     filt_kern = 0, # median filter kernel size, if set to 0 then no filter is applied
     filt_sigma = 0, # gaussian filter sigma, if set to 0 then no filter is applied
-    threshold = 0 # z-score threshold for outlier detection, if set to 0 then no filter is applied, (lower threshold means more points are considered outliers (2 is typical value))             
+    threshold = 0, # z-score threshold for outlier detection on Hall resistivity vs field data, if set to 0 then no filter is applied, (lower threshold means more points are considered outliers (2 is typical value))
+    threshold_current = 0 # z-score threshold for outlier detection on current-voltage data, if set to 0 then no filter is applied
     ):
     '''
     Van der Pauw Hall Effect Analysis for Thin Films
@@ -321,10 +334,17 @@ def vdp_hall(
                     #### Step 1: Use linear regression on the current-voltage data to obtain the Hall resistivity at each field
                     # R_ij_kl[0] = the slope(resistance), R_ij_kl[1] = intercept, R_ij_kl[2] = R-squared value     
                     
+                    # Filter I-V data if threshold_current is specified
+                    # Hall configuration A: R_13_42
+                    I_filt_A, V_filt_A = filter_IV_data(data_np_nd[Ti,Bi,:,2,0], data_np_nd[Ti,Bi,:,4,0], threshold_current)
+                    # Hall configuration B: R_24_31
+                    I_filt_B, V_filt_B = filter_IV_data(data_np_nd[Ti,Bi,:,2,1], data_np_nd[Ti,Bi,:,4,1], threshold_current)
+                    
+                    # Perform linear regression on filtered data
                     # Hall Resitance in configuration A
-                    R_13_42 = linregress(data_np_nd[Ti,Bi,:,2,0], data_np_nd[Ti,Bi,:,4,0]) #Regression on (x,y) = (I_source, V_measured) 
+                    R_13_42 = linregress(I_filt_A, V_filt_A) #Regression on (x,y) = (I_source, V_measured) 
                     # Hall resistance in configuration B (with source and sense leads swapped)
-                    R_24_31 = linregress(data_np_nd[Ti,Bi,:,2,1], data_np_nd[Ti,Bi,:,4,1]) #Regression on (x,y) = (H_applied, V_measured)
+                    R_24_31 = linregress(I_filt_B, V_filt_B) #Regression on (x,y) = (I_source, V_measured)
                     
                     # Average the two solutions for the final sheet resistivity
                     R_hall_average = (R_13_42[0] + R_24_31[0]) / 2
