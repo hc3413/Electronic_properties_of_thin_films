@@ -368,17 +368,28 @@ def vdp_hall(
                 HC_av = linregress(hall_data[Ti,:,1], hall_data[Ti,:,6])
                 #print('HC_av',HC_av[0])
                 
+                # Extract Hall coefficients (slopes)
+                Hall_Coeff_A = HC_13_42[0]
+                Hall_Coeff_B = HC_24_31[0]
+                Hall_Coeff_average = HC_av[0]
+                
+                # Check for p-type carrier and invert Hall coefficient if necessary
+                if ppms.carrier_type == 'p_type':
+                    Hall_Coeff_A *= -1
+                    Hall_Coeff_B *= -1
+                    Hall_Coeff_average *= -1
+                
                 ### Step 3: Calculate the charge carrier density and its corresponding error
                 
                 #calculate the charge carrier density
-                cc_density = 1e-6 * np.divide(1, np.multiply(HC_av[0], scipy.constants.e))
+                cc_density = 1e-6 * np.divide(1, np.multiply(Hall_Coeff_average, scipy.constants.e))
                 
                 ## Error calculation for the Hall coefficient values
                 # Taking the error from the linear regression of the average as this is the most accurate value
                 Hall_error = HC_av.stderr
                 #print('Hall_error',Hall_error)
                 # Charge carrier density error is calculated from error propogation
-                cc_density_error = 1e-6 *np.divide(Hall_error, np.multiply(HC_av[0]**2, scipy.constants.e))
+                cc_density_error = 1e-6 *np.divide(Hall_error, np.multiply(Hall_Coeff_average**2, scipy.constants.e))
                 #print('cc_density:',cc_density,'cc_density_error',cc_density_error)
                 
                 #### Step 4: Calculate the mobility and its corresponding error
@@ -388,17 +399,17 @@ def vdp_hall(
                 resistivity_error = ppms.res_data[Ti, int(ctf[5]/2), 5]
             
                 # Mobility is calculated from the Hall coefficient and the zero field resistivity (1e4 to convert to cm^2/Vs)
-                mobility = 1e4*np.divide(HC_av[0], resitivity)
+                mobility = 1e4*np.divide(Hall_Coeff_average, resitivity)
                 
                 # Error in the mobility is calculated from error propogation (1e4 to convert to cm^2/Vs)
                 # u = Rh/rho -> d(mobility) = sqrt((du/dRh *dRh)^2 + (du/drho *drho)^2)
-                mobility_error = 1e4*np.sqrt((Hall_error/resitivity)**2 + ((HC_av[0]*resistivity_error)/resitivity**2)**2)
+                mobility_error = 1e4*np.sqrt((Hall_error/resitivity)**2 + ((Hall_Coeff_average*resistivity_error)/resitivity**2)**2)
                 
                 
                 # Average the temperatures over all field values to get a measurement average temperature
                 average_temperature = np.sum(tf_av[Ti,:,0], axis=0)/tf_av.shape[1] 
                 
-                hall_coefficient[Ti,:-2] = [average_temperature, HC_13_42[0], HC_13_42[2], HC_24_31[0],HC_24_31[2],HC_av[0],HC_av[2], cc_density, cc_density_error, mobility, mobility_error]
+                hall_coefficient[Ti,:-2] = [average_temperature, Hall_Coeff_A, HC_13_42[2], Hall_Coeff_B,HC_24_31[2],Hall_Coeff_average,HC_av[2], cc_density, cc_density_error, mobility, mobility_error]
                 
             # Flatten the hall_data array to a 2D array so it can be put into a df for debugging
             hall_data_flat = np.copy(hall_data).reshape((ctf[4]*ctf[5],7))

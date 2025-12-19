@@ -43,6 +43,7 @@ class PPMSData:
     measurement_type: str = 'VDP' #measurement type to identify the measurement type as VDP (Van der Pauw Geometry) or HallBar (Hall Bar Geometry)
     hb_dimensions: tuple = None # dimensions of the Hall Bar in um: (width of channel, length between voltage arms)
     rotator: bool = False #If True, rotator used, theta angle is stored in the V_source column and used to calculate the field strength
+    carrier_type: str = 'n_type' # Carrier type of the sample, 'n_type' or 'p_type'
 
 def import_ppms_data(
     path, #path to the directory containing the PPMS data
@@ -52,6 +53,7 @@ def import_ppms_data(
     V_inv: bool = False, #invert the sense voltage in case the cables were switched during the measurement (for HC011)
     measurement_type: str = 'VDP', #measurement type to identify the measurement type as 'VDP' or 'HallBar'
     hb_dimensions: tuple = None, # Hall bar dimensions in um (width, length_between_arms), required if measurement_type='HallBar'
+    carrier_type: str = 'n_type', # Carrier type of the sample, 'n_type' or 'p_type'
     
     ):
     '''
@@ -184,7 +186,8 @@ def import_ppms_data(
             sample_code = sample_code,
             measurement_type = measurement_type,
             hb_dimensions = hb_dimensions, # Store dimensions if HallBar
-            rotator = rotator # Whether the rotator was used
+            rotator = rotator, # Whether the rotator was used
+            carrier_type = carrier_type # Carrier type of the sample
             ))
         
         # Print the filenames of the imported data to check they are correct along with the shape of the numpy array
@@ -439,10 +442,11 @@ def import_all_datasets():
         },
         {
             'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/VDP_HP05_MoS2/Data/',
-            'film_thickness': 2.5e-3,
-            'material': '$MoS_2$',
+            'film_thickness': 1.12e-3,
+            'material': '$SnSe$',
             'sample_code': 'HP05',
             'V_inv': False,
+            'carrier_type': 'p_type',
             'notes': 'first Xin sample of MoS2 testing with silver paste contacts which were wirebonded on to and using quartz to mount it thermally'
         },
         {
@@ -469,6 +473,96 @@ def import_all_datasets():
             'V_inv': False,
             'notes': 'Au/Ti pads on LSMO/STO',
         },
+        
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/HallBar_MFS097/Data/',
+            'film_thickness': 20e-9,
+            'material': '$WO3/BTO/SSTO/SRO/STO$',
+            'sample_code': 'MFS097_HB',
+            'V_inv': False,
+            'measurement_type': 'HallBar',
+            'hb_dimensions': (30, 100),  # width of channel, length between voltage arms in um
+            'notes': 'on one of the hall bars, but probably got leakage through the BTO layer',
+        },
+        
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM012/Data/',
+            'film_thickness': 22e-9,
+            'material': '$LaBSO/Ba_{0.7}Sr_{0.3}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'EM012',
+            'V_inv': False,
+            'notes': 'Faulty contact',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM013/Data/',
+            'film_thickness': 22e-9,
+            'material': '$LaBSO/Ba_{0.4}Sr_{0.6}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'EM013',
+            'V_inv': False,
+            'notes': 'should be good quality',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/CP01/Data/',
+            'film_thickness': 0.58e-3,
+            'material': '$SnSe$',
+            'sample_code': 'CP01',
+            'V_inv': False,
+            'notes': 'uses indium soldering to make the contact',
+            'carrier_type': 'p_type'
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM014/Data/',
+            'film_thickness': 22e-9,
+            'material': '$La_{0.05\\%}BSO/Ba_{0.55}Sr_{0.45}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'EM014',
+            'V_inv': False,
+            'notes': 'should be good quality',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM015/Data/',
+            'film_thickness': 27e-9,
+            'material': '$La_{0.05\\%}BSO/Ba_{0.7}Sr_{0.3}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'EM015',
+            'V_inv': False,
+            'notes': 'should be good quality but small crack in the corner',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/DE_37/Data/',
+            'film_thickness': 0.77e-3,
+            'material': '$SnSe$',
+            'sample_code': 'DE_37',
+            'V_inv': False,
+            'notes': 'uses indium soldering to make the contact',
+            'carrier_type': 'p_type'
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/DE_39/Data/',
+            'film_thickness': 0.51e-3,
+            'material': '$SnSe$',
+            'sample_code': 'DE_39',
+            'V_inv': False,
+            'notes': 'uses indium soldering to make the contact',
+            'carrier_type': 'p_type'
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/DIW_07/Data/',
+            'film_thickness': 0.72e-3,
+            'material': '$SnSe$',
+            'sample_code': 'DIW_07',
+            'V_inv': False,
+            'notes': 'uses indium soldering to make the contact',
+            'carrier_type': 'p_type'
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/HP_07/Data/',
+            'film_thickness': 0.97e-3,
+            'material': '$SnSe$',
+            'sample_code': 'HP_07',
+            'V_inv': False,
+            'notes': 'uses indium soldering to make the contact',
+            'carrier_type': 'p_type'
+        },
+        
     ]
     
     # Import each dataset
@@ -481,6 +575,9 @@ def import_all_datasets():
         
         # Extract the measurement type if it exists, otherwise default to 'VDP'
         measurement_type = dataset.get('measurement_type', 'VDP')
+        
+        # Extract carrier_type if it exists, otherwise default to 'n_type'
+        carrier_type = dataset.get('carrier_type', 'n_type')
         
         # Extract Hall bar dimensions if measurement_type is 'HallBar'
         hb_dimensions = dataset.get('hb_dimensions', None) if measurement_type == 'HallBar' else None
@@ -498,6 +595,7 @@ def import_all_datasets():
                 sample_code=dataset['sample_code'],
                 V_inv=v_inv,
                 measurement_type=measurement_type,
+                carrier_type=carrier_type,
                 # No hb_dimensions needed for VDP
 
             ))
@@ -516,7 +614,8 @@ def import_all_datasets():
                 sample_code=dataset['sample_code'],
                 V_inv=v_inv,
                 measurement_type=measurement_type,
-                hb_dimensions=hb_dimensions # Pass the dimensions here
+                hb_dimensions=hb_dimensions, # Pass the dimensions here
+                carrier_type=carrier_type
 
             ))
 

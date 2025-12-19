@@ -293,6 +293,12 @@ def hallbar_hall(
                 Hall_Coeff_B = HC_B_fit.slope
                 Hall_Coeff_average = HC_av_fit.slope
                 
+                # Check for p-type carrier and invert Hall coefficient if necessary
+                if ppms.carrier_type == 'p_type':
+                    Hall_Coeff_A *= -1
+                    Hall_Coeff_B *= -1
+                    Hall_Coeff_average *= -1
+                
                 ### Step 3: Calculate the charge carrier density (n = 1 / (R_H * e)) and its corresponding error
                 
                 # Calculate the charge carrier density using the average Hall coefficient
