@@ -520,7 +520,7 @@ def import_all_datasets():
         },
         {
             'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM015/Data/',
-            'film_thickness': 27e-9,
+            'film_thickness': 22e-9,
             'material': '$La_{0.05\\%}BSO/Ba_{0.7}Sr_{0.3}SnO_3/SrSnO_3/STO$',
             'sample_code': 'EM015',
             'V_inv': False,
@@ -561,6 +561,38 @@ def import_all_datasets():
             'V_inv': False,
             'notes': 'uses indium soldering to make the contact',
             'carrier_type': 'p_type'
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM016/Data/',
+            'film_thickness': 22e-9,
+            'material': '$La_{0.05\\%}BSO/Ba_{0.4}Sr_{0.6}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'EM016',
+            'V_inv': True,
+            'notes': 'should be good quality - vacuum annealed',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM017/Data/',
+            'film_thickness': 22e-9,
+            'material': '$La_{0.05\\%}BSO/STO$',
+            'sample_code': 'EM017',
+            'V_inv': True,
+            'notes': 'should be good quality',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM018/Data/',
+            'film_thickness': 22e-9,
+            'material': '$La_{0.05\\%}BSO/STO$',
+            'sample_code': 'EM018',
+            'V_inv': True,
+            'notes': 'should be good quality',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM019/Data/',
+            'film_thickness': 22e-9,
+            'material': '$La_{0.05\\%}BSO/STO$',
+            'sample_code': 'EM019',
+            'V_inv': True,
+            'notes': 'should be good quality',
         },
         
     ]
