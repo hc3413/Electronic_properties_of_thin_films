@@ -5,7 +5,6 @@ import pathlib
 from pathlib import Path
 import math
 from dataclasses import dataclass, field
-import readline
 
 # Data Handling
 import numpy as np

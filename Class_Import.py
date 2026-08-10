@@ -44,6 +44,10 @@ class PPMSData:
     hb_dimensions: tuple = None # dimensions of the Hall Bar in um: (width of channel, length between voltage arms)
     rotator: bool = False #If True, rotator used, theta angle is stored in the V_source column and used to calculate the field strength
     carrier_type: str = 'n_type' # Carrier type of the sample, 'n_type' or 'p_type'
+    
+    # Growth / structural parameters loaded from external database, keyed by material layer
+    # Structure: {'BSO': {'O2_growth_pressure': 0.01, 'a': 4.09, ...}, 'SSO': {...}, ...}
+    sample_parameters: dict = field(default_factory=dict)
 
 def import_ppms_data(
     path, #path to the directory containing the PPMS data
@@ -328,8 +332,8 @@ def import_all_datasets():
             'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/VDP_DR008a_BSO_LSO_STO/Data/',
             'film_thickness': 1,
             'material': '$LaScO_3/BaSnO_3/SrTiO_3$',
-            'sample_code': 'DR008a',
-            'notes': ''
+            'sample_code': 'DR008',
+            'notes': 'DR008a actually'
         },
         {
             'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/VDP_HC016_LSO_BSO_LaSSO_STO/Data/',
@@ -593,6 +597,94 @@ def import_all_datasets():
             'sample_code': 'EM019',
             'V_inv': True,
             'notes': 'should be good quality',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM020/Data/',
+            'film_thickness': 22e-9,
+            'material': '$La_{0.05\\%}BSO/Ba_{0.4}Sr_{0.6}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'EM020',
+            'V_inv': True,
+            'notes': 'Lower oxygen pressure for BSO growth than EM016',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM021/Data/',
+            'film_thickness': 1,
+            'material': '$La_{0.2\\%}BSO/Ba_{0.4}Sr_{0.6}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'EM021',
+            'V_inv': True,
+            'notes': 'should be good quality - very low La doping',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM022/Data/',
+            'film_thickness': 22e-9,
+            'material': '$La_{7\\%}BSO/Ba_{0.4}Sr_{0.6}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'EM022',
+            'V_inv': True,
+            'notes': '',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM023/Data/',
+            'film_thickness': 1,
+            'material': '$La_{3\\%}BSO/Ba_{0.4}Sr_{0.6}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'EM023',
+            'V_inv': True,
+            'notes': '',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM024/Data/',
+            'film_thickness': 1,
+            'material': '$LSO/BSO/Ba_{0.4}Sr_{0.6}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'EM024',
+            'V_inv': True,
+            'notes': '',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM025/Data/',
+            'film_thickness': 1,
+            'material': '$LSO/BSO/Ba_{0.55}Sr_{0.45}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'EM025',
+            'V_inv': True,
+            'notes': '',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/HC021/Data/',
+            'film_thickness': 1,
+            'material': '$LSO/La{3\\%}BSO/Ba_{0.4}Sr_{0.6}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'HC021',
+            'V_inv': True,
+            'notes': '',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM026/Data/',
+            'film_thickness': 1,
+            'material': '$LSO/BSO/STO$',
+            'sample_code': 'EM026',
+            'V_inv': True,
+            'notes': '',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/HC019/Data/',
+            'film_thickness': 1,
+            'material': '$LSO/La{0.2\\%}BSO/Ba_{0.4}Sr_{0.6}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'HC019',
+            'V_inv': True,
+            'notes': '',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/SM06/Data/',
+            'film_thickness': 10e-9,
+            'material': '$WO3/HZO/NbSTO$',
+            'sample_code': 'SM06',
+            'V_inv': True,
+            'notes': '',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/JT147/Data/',
+            'film_thickness': 20e-9,
+            'material': '$BTO/BSO/Ba_{0.55}Sr_{0.45}SnO_3/SrSnO_3/STO$',
+            'sample_code': 'JT147',
+            'V_inv': True,
+            'notes': '',
         },
         
     ]
