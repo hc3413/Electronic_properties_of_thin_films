@@ -608,7 +608,7 @@ def import_all_datasets():
         },
         {
             'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM021/Data/',
-            'film_thickness': 1,
+            'film_thickness': 22e-9,
             'material': '$La_{0.2\\%}BSO/Ba_{0.4}Sr_{0.6}SnO_3/SrSnO_3/STO$',
             'sample_code': 'EM021',
             'V_inv': True,
@@ -685,6 +685,23 @@ def import_all_datasets():
             'sample_code': 'JT147',
             'V_inv': True,
             'notes': '',
+        },
+        
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM039/Data/',
+            'film_thickness': 1,
+            'material': '$LSO/BSO/STO$',
+            'sample_code': 'EM039',
+            'V_inv': True,
+            'notes': '0.03mbar LSO',
+        },
+        {
+            'path': '/Users/horatiocox/Desktop/RUG_Postdoc/Experiments/Electrical/EM040/Data/',
+            'film_thickness': 1,
+            'material': '$LSO/BSO/STO$',
+            'sample_code': 'EM040',
+            'V_inv': True,
+            'notes': '0.08mbar LSO',
         },
         
     ]

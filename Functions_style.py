@@ -2,16 +2,30 @@
 from import_dep import *
 
 
-def set_plot_style(export_data = False, powerpoint_data = False, use_tex=True):
+# Remembers the arguments of the most recent set_plot_style() call, so that
+# plotting functions can re-apply the notebook's choices via apply_plot_style()
+# instead of silently resetting them (same machinery as the other repos).
+_LAST_STYLE = {'export_data': False, 'powerpoint_data': False,
+               'use_tex': False, 'markersize': None}
+
+
+def set_plot_style(export_data = False, powerpoint_data = False, use_tex=False,
+                   markersize=None):
     """
     Set publication-quality plot styles.
     
     Parameters:
     -----------
     use_tex : bool
-        Whether to use LaTeX for rendering text (default: True)
+        Whether to use LaTeX for rendering text (default: False - LaTeX text
+        renders as paths in SVG, breaking editable-text exports)
+    markersize : float, optional
+        Override the default markersize (default 4.0).
     """
-    
+    _LAST_STYLE.update({'export_data': export_data,
+                        'powerpoint_data': powerpoint_data,
+                        'use_tex': use_tex, 'markersize': markersize})
+
     # Set the figure size based on whether we are visualising or exporting the data
     if export_data == True:
         fig_size = [3.5, 2.625] # Publication ready sizes
@@ -30,8 +44,15 @@ def set_plot_style(export_data = False, powerpoint_data = False, use_tex=True):
         'figure.figsize':fig_size,
         'savefig.bbox': 'tight',
         'savefig.pad_inches': 0.05,
-        
+        # Raster export resolution: without this, matplotlib's default of 100
+        # DPI applies and every exported TIFF/PNG is below journal minimum.
+        'savefig.dpi': 600,
+
         # Font and text settings
+        # Editable SVG text (working-with-my-files.md, 7 Aug 2026): keep text
+        # as TEXT so labels stay editable in Affinity/Inkscape. Requires
+        # use_tex=False - usetex always outputs text as paths regardless.
+        'svg.fonttype': 'none',
         'font.family': ['serif'],
         'font.size': 9,  # Base font size
         'axes.labelsize': 10,
@@ -58,7 +79,7 @@ def set_plot_style(export_data = False, powerpoint_data = False, use_tex=True):
         
         # Line settings
         'lines.linewidth': 1.0,
-        'lines.markersize': 4.0,
+        'lines.markersize': markersize if markersize is not None else 4.0,
         # Errorbar settings
         'errorbar.capsize': 0,
         
@@ -84,6 +105,23 @@ def set_plot_style(export_data = False, powerpoint_data = False, use_tex=True):
     })
     
     return fig_size
+
+
+def apply_plot_style(export_data=None):
+    """Re-apply the style the notebook set up, for use inside plotting
+    functions. Calling set_plot_style() from inside a function resets every
+    rcParam to that call's defaults, silently discarding what the notebook
+    asked for; this re-applies the remembered settings, overriding only
+    ``export_data``. Returns the figure size, exactly as set_plot_style does."""
+    remembered = dict(_LAST_STYLE)
+    kwargs = dict(remembered)
+    if export_data is not None:
+        kwargs['export_data'] = export_data
+    try:
+        return set_plot_style(**kwargs)
+    finally:
+        _LAST_STYLE.update(remembered)
+
 
 
 def add_colorbar(fig, ax, sm, min_val, max_val, fig_size, field = True):
@@ -470,3 +508,51 @@ def sample_tag_gen(dat):
             sample_code_list.append(d.sample_code)
             
     return tag_list
+
+
+# Matched SVG+TIFF export, per the pipeline style contract.
+
+
+def save_figure(fig, output_stem, formats=('svg', 'tiff'), dpi=600,
+                transparent=False, close=False):
+    """Save one figure as a matched set of files sharing a single stem.
+
+    The pipeline convention is that every exported figure exists as an SVG
+    (vector, for Affinity Designer layout) and a TIFF (raster, for journals
+    that will not take vector). Both are written from the same figure object
+    in the same call so they can never drift apart.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+    output_stem : str or pathlib.Path
+        Path WITHOUT extension. Should sit in the sample's Output/ directory
+        and reuse the source data filename stem, per the layout spec.
+    formats : tuple of str
+        Extensions to write. Default ('svg', 'tiff').
+    dpi : int
+        Raster resolution. Ignored by SVG except for embedded rasters.
+    transparent : bool
+        Transparent background. Default False - journals prefer white.
+    close : bool
+        Close the figure after saving.
+
+    Returns
+    -------
+    list of pathlib.Path : the files written, in the order given.
+    """
+    from pathlib import Path
+    stem = Path(output_stem)
+    stem.parent.mkdir(parents=True, exist_ok=True)
+    written = []
+    for ext in formats:
+        # NOT Path.with_suffix(): a stem like 'DR009_CV_Vdc_+0.50V' contains
+        # a decimal point, and with_suffix would truncate it to '..._Vdc_+0.svg'
+        # (and silently overwrite the 0.25V/0.75V exports with each other).
+        out = stem.parent / (stem.name + '.' + ext.lstrip('.'))
+        fig.savefig(out, dpi=dpi, transparent=transparent)
+        written.append(out)
+    if close:
+        plt.close(fig)
+    return written
+
