@@ -18,15 +18,15 @@ class PPMSData:
     tf_av: np.ndarray = None #average temperature and field values as measured during each set of current measurements
     
     # Calculated Resistivity data
-    res_data: np.ndarray = None # Bulk resistivity data (rho_xx) calculated using VDP or HallBar: columns = ['Temp (K)', 'Field (T)', 'rho_xx_A (Ohm.m)', 'rho_xx_B (Ohm.m)','rho_xx_average (Ohm.m)', 'rho_error (Ohm.m)']
+    res_data: np.ndarray = None # Bulk resistivity data (rho_xx) calculated using VDP or HallBar: columns = ['Temp (K)', 'Field (T)', 'rho_xx_A (Ohm.m)', 'rho_xx_B (Ohm.m)','rho_xx_average (Ohm.m)', 'rho_error (Ohm.m)', 'rho_fit (Ohm.m)'] - sheet resistance R_s (Ohm/sq) when film_thickness = 1
     res_data_df: pd.DataFrame = None # Bulk resistivity data (rho_xx) calculated using VDP or HallBar in a pandas dataframe
     R_squared_res: list = None #R-squared values for the linear regression of the I-V data used for rho_xx calculation
     mag_res: np.ndarray = None #magnetoresistance data calculated for each temperature and field strength: columns = [MR_A(%), MR_B(%), MR_avg(%), MR_avg_error(%)]
     
     # Calculated Hall data
-    hall_data: np.ndarray = None #Hall resistivity data (rho_xy) calculated for each temperature and field strength: columns = ['Temp (K)', 'Field (T)', 'rho_xy_A (Ohm.m)', 'R^2(I-V)_A', 'rho_xy_B (Ohm.m)','R^2(I-V)_B', 'rho_xy_average (Ohm.m)']
+    hall_data: np.ndarray = None #Hall resistivity data (rho_xy) calculated for each temperature and field strength: columns = ['Temp (K)', 'Field (T)', 'rho_xy_A (Ohm.m)', 'R^2(I-V)_A', 'rho_xy_B (Ohm.m)','R^2(I-V)_B', 'rho_xy_average (Ohm.m)'] - Hall resistance R_xy (Ohm) when film_thickness = 1
     hall_data_df: pd.DataFrame = None #Hall resistivity data (rho_xy) calculated for each temperature and field strength in a pandas dataframe
-    hall_coefficient: np.ndarray = None #Hall coefficient (R_H) and derived data calculated for each temperature: columns = ['Temp (K)', 'HallCoeff_A (m3/C)', 'R^2(B)_A', 'HallCoeff_B (m3/C)','R^2(B)_B', 'HallCoeff_Avg (m3/C)','R^2(B)_Avg', 'n (cm^-3)', 'n_Error (cm^-3)', 'Mobility (cm^2/Vs)', 'Mobility_Error (cm^2/Vs)']
+    hall_coefficient: np.ndarray = None #Hall coefficient (R_H) and derived data calculated for each temperature: columns = ['Temp (K)', 'HallCoeff_A (m3/C)', 'R^2(B)_A', 'HallCoeff_B (m3/C)','R^2(B)_B', 'HallCoeff_Avg (m3/C)','R^2(B)_Avg', 'n (cm^-3)', 'n_Error (cm^-3)', 'Mobility (cm^2/Vs)', 'Mobility_Error (cm^2/Vs)', 'n_fitted (cm^-3)', 'Mobility_fitted (cm^2/Vs)'] - R_H in m2/C and sheet density n_s in cm^-2 when film_thickness = 1
     hall_coefficient_df: pd.DataFrame = None #Hall coefficient (R_H) and derived data calculated for each temperature in a pandas dataframe
     
     # Fitted Data
@@ -34,7 +34,7 @@ class PPMSData:
     # File and directory parameters
     directory: str = None #directory to save the output files to
     filename: str = None #filename of the data
-    film_thickness: float = None  #thickness of the film in meters - set to 1 as default, if set to 1 then you are calculating sheet resistance not resistivity
+    film_thickness: float = None  #thickness of the film in meters - set to 1 as default, if set to 1 then you are calculating sheet resistance (Ohm/sq) and sheet carrier density (cm^-2) not resistivity and volume density (cm^-3)
     material: str = None #material of the film
     plot_str: str = None #strings to be used at the start of the figure file name, including the sample code
     sample_code: str = None # Sample code to identify the sample
@@ -51,7 +51,7 @@ class PPMSData:
 
 def import_ppms_data(
     path, #path to the directory containing the PPMS data
-    film_thickness = 1.0, #thickness of the film in meters - set to 1 as default, if set to 1 then you are calculating sheet resistance not resistivity
+    film_thickness = 1.0, #thickness of the film in meters - set to 1 as default, if set to 1 then you are calculating sheet resistance (Ohm/sq) and sheet carrier density (cm^-2) not resistivity and volume density (cm^-3)
     material = 'NA', #materials of the thin film stack
     sample_code = 'NA', #strings to be used at the start of the figure file name, including the sample code
     V_inv: bool = False, #invert the sense voltage in case the cables were switched during the measurement (for HC011)
