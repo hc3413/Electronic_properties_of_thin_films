@@ -194,8 +194,11 @@ def hallbar_resistivity(
                 
             # Flatten the res_data array to a 2D array so it can be put into a df for debugging
             res_data_flat = res_data.reshape((ctf[4]*ctf[5],7))  
-            # Convert the numpy array to a pandas dataframe 
-            res_data_df = pd.DataFrame(res_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (Ohm.m)', 'rho_xx_B (Ohm.m)','rho_xx_average (Ohm.m)', 'rho_error (Ohm.m)', 'rho_fit (Ohm.m)'])
+            # Convert the numpy array to a pandas dataframe (for a 2D sheet, film_thickness = 1, the values are the sheet resistance in Ohm/sq)
+            if film_thickness == 1:
+                res_data_df = pd.DataFrame(res_data_flat, columns=['Temp (K)', 'Field (T)', 'R_s_A (Ohm/sq)', 'R_s_B (Ohm/sq)','R_s_average (Ohm/sq)', 'R_s_error (Ohm/sq)', 'R_s_fit (Ohm/sq)'])
+            else:
+                res_data_df = pd.DataFrame(res_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (Ohm.m)', 'rho_xx_B (Ohm.m)','rho_xx_average (Ohm.m)', 'rho_error (Ohm.m)', 'rho_fit (Ohm.m)'])
             
             # Store the data in the PPMSData object
             ppms.res_data = res_data
@@ -301,17 +304,17 @@ def hallbar_hall(
                 
                 ### Step 3: Calculate the charge carrier density (n = 1 / (R_H * e)) and its corresponding error
                 
-                # Calculate the charge carrier density using the average Hall coefficient
-                # Factor 1e-6 converts from m^-3 to cm^-3
-                cc_density = 1e-6 / (Hall_Coeff_average * scipy.constants.e) if Hall_Coeff_average != 0 else np.nan
-                
                 ## Error calculation for the Hall coefficient values
                 # Taking the error from the linear regression of the average rho_xy vs B fit
                 Hall_Coeff_average_error = HC_av_fit.stderr
                 
-                # Charge carrier density error is calculated from error propagation: dn = |(dn/dR_H) * dR_H| = |-1/(R_H^2 * e) * dR_H|
-                # Factor 1e-6 converts units
-                cc_density_error = 1e-6 * np.abs(Hall_Coeff_average_error / ((Hall_Coeff_average**2) * scipy.constants.e)) if Hall_Coeff_average != 0 else np.nan
+                # Calculate the charge carrier density using the average Hall coefficient
+                # Error from error propagation: dn = |(dn/dR_H) * dR_H| = |-1/(R_H^2 * e) * dR_H|
+                # In cm^-2 for a 2D sheet (film_thickness = 1) and cm^-3 for a film (see carrier_density in Functions_General)
+                if Hall_Coeff_average != 0:
+                    cc_density, cc_density_error = carrier_density(Hall_Coeff_average, Hall_Coeff_average_error, film_thickness)
+                else:
+                    cc_density, cc_density_error = np.nan, np.nan
                 
                 #### Step 4: Calculate the mobility (mu = R_H / rho_xx) and its corresponding error
                 
@@ -355,11 +358,17 @@ def hallbar_hall(
             # Flatten the hall_data array to a 2D array so it can be put into a df for debugging
             hall_data_flat = np.copy(hall_data).reshape((ctf[4]*ctf[5],7))
             
+            # Column units follow the film_thickness sentinel: for a 2D sheet (film_thickness = 1) the Hall data is R_xy in Ohm, R_H is in m2/C and n is in cm^-2
+            if film_thickness == 1:
+                xy, xy_unit, RH_unit, n_unit = 'R_xy', 'Ohm', 'm2/C', 'cm^-2'
+            else:
+                xy, xy_unit, RH_unit, n_unit = 'rho_xy', 'Ohm.m', 'm3/C', 'cm^-3'
+
             # Convert the numpy array to a pandas dataframe for the Hall resistivity
-            hall_data_df = pd.DataFrame(hall_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xy_A (Ohm.m)', 'R^2(I-V)_A', 'rho_xy_B (Ohm.m)','R^2(I-V)_B', 'rho_xy_average (Ohm.m)'])
+            hall_data_df = pd.DataFrame(hall_data_flat, columns=['Temp (K)', 'Field (T)', f'{xy}_A ({xy_unit})', 'R^2(I-V)_A', f'{xy}_B ({xy_unit})','R^2(I-V)_B', f'{xy}_average ({xy_unit})'])
             
             # Convert the numpy array to a pandas dataframe for the Hall coefficient and derived quantities
-            hall_coefficient_df = pd.DataFrame(hall_coefficient, columns=['Temp (K)', 'HallCoeff_A (m3/C)', 'R^2(B)_A', 'HallCoeff_B (m3/C)','R^2(B)_B', 'HallCoeff_Avg (m3/C)','R^2(B)_Avg', 'n (cm^-3)', 'n_Error (cm^-3)', 'Mobility (cm^2/Vs)', 'Mobility_Error (cm^2/Vs)', 'n_fitted (cm^-3)', 'Mobility_fitted (cm^2/Vs)'])
+            hall_coefficient_df = pd.DataFrame(hall_coefficient, columns=['Temp (K)', f'HallCoeff_A ({RH_unit})', 'R^2(B)_A', f'HallCoeff_B ({RH_unit})','R^2(B)_B', f'HallCoeff_Avg ({RH_unit})','R^2(B)_Avg', f'n ({n_unit})', f'n_Error ({n_unit})', 'Mobility (cm^2/Vs)', 'Mobility_Error (cm^2/Vs)', f'n_fitted ({n_unit})', 'Mobility_fitted (cm^2/Vs)'])
             
             # Store the data in the PPMSData object
             ppms.hall_data = hall_data

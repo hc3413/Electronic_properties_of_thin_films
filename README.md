@@ -39,7 +39,7 @@ The Van der Pauw method enables resistivity and Hall effect measurements on arbi
 
 **Physical Output:**
 - Hall coefficient with sign indicating carrier type (positive=holes, negative=electrons)
-- 2D charge carrier density (cm⁻²)
+- Charge carrier density: sheet density (cm⁻²) for a 2D sheet (`film_thickness = 1`), volume density (cm⁻³) for a film
 - Mobility (cm²/V·s) with uncertainty quantification
 
 ### Hall Bar Method
@@ -178,15 +178,17 @@ Measurement configurations:
 
 ## Output Data Format
 
+Units depend on `film_thickness`. A real thickness in metres gives film quantities; `film_thickness = 1` is the sentinel for a 2D sheet and gives sheet quantities.
+
 **Resistivity Data:**
 - Temperature (K), Magnetic Field (T)
-- ρ_xx (Ω·m) with uncertainty
+- ρ_xx (Ω·m) with uncertainty, or R_s (Ω/sq) for a 2D sheet
 - Configuration-specific values for validation
 
 **Hall Data:**
-- Hall coefficient (m³/C) with uncertainty
-- Charge carrier density (cm⁻²)  
-- Mobility (cm²/V·s) with uncertainty
+- Hall coefficient (m³/C) with uncertainty, or m²/C (Ω/T) for a 2D sheet
+- Charge carrier density n (cm⁻³), or sheet density n_s = n·t (cm⁻²) for a 2D sheet
+- Mobility (cm²/V·s) with uncertainty, independent of `film_thickness`
 - R² values for fit quality assessment
 
 **Transport Fitting:**

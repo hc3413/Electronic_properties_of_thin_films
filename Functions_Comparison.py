@@ -634,9 +634,10 @@ def growth_optimisation_plot(
         # Electrical
         'mobility': r'$\mu$ (cm$^2$V$^{-1}$s$^{-1}$)',
         'carrier_density': _n_label_axis,
-        'rho_xx': r'$\rho_{xx}$ ($\Omega \cdot$m)',
+        # For a 2D sheet (film_thickness = 1) rho_xx holds the sheet resistance and R_H is in m^2/C
+        'rho_xx': r'$R_{\square}$ ($\Omega/\square$)' if _is_2d else r'$\rho_{xx}$ ($\Omega \cdot$m)',
         'sheet_resistance': r'$R_{\square}$ ($\Omega/\square$)',
-        'hall_coefficient': r'$R_H$ (m$^3$/C)',
+        'hall_coefficient': r'$R_H$ (m$^2$/C)' if _is_2d else r'$R_H$ (m$^3$/C)',
         # XRD / structural
         'a': r'$a_{\parallel}$ $(\mathrm{\AA})$',
         'c': r'$c_{\perp}$ $(\mathrm{\AA})$',

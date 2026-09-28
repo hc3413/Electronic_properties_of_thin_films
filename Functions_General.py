@@ -449,3 +449,19 @@ def filter_IV_data(I_data, V_data, threshold_current):
     
     return I_filtered, V_filtered
 
+
+def carrier_density(Hall_Coeff, Hall_Coeff_error, film_thickness):
+    '''Single-band charge carrier density n = 1/(R_H * e) and its propagated error, in cm units.
+
+    The unit of R_H depends on film_thickness, because rho_xy = R_xy * film_thickness:
+    - film_thickness = 1 is the sentinel for a 2D sheet. R_H is the slope of R_xy vs B in ohm/T = m^2/C,
+      so n is a sheet density in m^-2, and 1e-4 converts it to cm^-2.
+    - Any other film_thickness is a real thickness in m. R_H is in m^3/C, so n is in m^-3,
+      and 1e-6 converts it to cm^-3.
+    Returns (n, n_error): error from dn = |dR_H / (R_H^2 * e)|, using the standard error of R_H.
+    '''
+    conv = 1e-4 if film_thickness == 1 else 1e-6 # m^-2 -> cm^-2 ; m^-3 -> cm^-3
+    n = conv / (Hall_Coeff * scipy.constants.e)
+    n_error = conv * np.abs(Hall_Coeff_error / (Hall_Coeff**2 * scipy.constants.e))
+    return n, n_error
+

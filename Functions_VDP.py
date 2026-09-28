@@ -208,8 +208,11 @@ def vdp_resistivity(
                 
             # Flatten the res_data array to a 2D array so it can be put into a df for debugging
             res_data_flat = res_data.reshape((ctf[4]*ctf[5],7))  
-            # Convert the numpy array to a pandas dataframe 
-            res_data_df = pd.DataFrame(res_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)', 'rho_error(ohm.m)', 'rho_fit(ohm.m)'])
+            # Convert the numpy array to a pandas dataframe (for a 2D sheet, film_thickness = 1, the values are the sheet resistance in ohm/sq)
+            if film_thickness == 1:
+                res_data_df = pd.DataFrame(res_data_flat, columns=['Temp (K)', 'Field (T)', 'R_s_A (ohm/sq)', 'R_s_B(ohm/sq)','R_s_average(ohm/sq)', 'R_s_error(ohm/sq)', 'R_s_fit(ohm/sq)'])
+            else:
+                res_data_df = pd.DataFrame(res_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xx_A (ohm.m)', 'rho_xx_B(ohm.m)','rho_xx_average(ohm.m)', 'rho_error(ohm.m)', 'rho_fit(ohm.m)'])
             
             # Store the data in the PPMSData object
             ppms.res_data = res_data
@@ -266,7 +269,8 @@ def vdp_hall(
     
     3. Charge Carrier Density: Calculate using the single-band model:
        n = 1/(R_H × e), where e is elementary charge
-       Convert to cm⁻² units for 2D systems
+       Convert to cm⁻² for a 2D sheet (film_thickness = 1), where R_H is in m²/C,
+       or to cm⁻³ for a film of real thickness, where R_H is in m³/C
     
     4. Mobility Calculation: Determine from Hall coefficient and zero-field resistivity:
        μ = R_H/ρ_xx, where ρ_xx is the longitudinal resistivity at B=0
@@ -303,7 +307,7 @@ def vdp_hall(
     Hall Coefficient Data (for each temperature):
     - Temperature (K)
     - Hall coefficients from configurations A, B, and average
-    - Charge carrier density (cm⁻²) with uncertainty
+    - Charge carrier density (cm⁻² for a 2D sheet, cm⁻³ for a film) with uncertainty
     - Mobility (cm²/V·s) with uncertainty
     - R² values for ρ_xy vs B fits
     '''
@@ -381,15 +385,14 @@ def vdp_hall(
                 
                 ### Step 3: Calculate the charge carrier density and its corresponding error
                 
-                #calculate the charge carrier density
-                cc_density = 1e-6 * np.divide(1, np.multiply(Hall_Coeff_average, scipy.constants.e))
-                
                 ## Error calculation for the Hall coefficient values
                 # Taking the error from the linear regression of the average as this is the most accurate value
                 Hall_error = HC_av.stderr
                 #print('Hall_error',Hall_error)
-                # Charge carrier density error is calculated from error propogation
-                cc_density_error = 1e-6 *np.divide(Hall_error, np.multiply(Hall_Coeff_average**2, scipy.constants.e))
+
+                # Calculate the charge carrier density and its error (from error propogation)
+                # in cm^-2 for a 2D sheet (film_thickness = 1) and cm^-3 for a film (see carrier_density in Functions_General)
+                cc_density, cc_density_error = carrier_density(Hall_Coeff_average, Hall_error, film_thickness)
                 #print('cc_density:',cc_density,'cc_density_error',cc_density_error)
                 
                 #### Step 4: Calculate the mobility and its corresponding error
@@ -414,11 +417,17 @@ def vdp_hall(
             # Flatten the hall_data array to a 2D array so it can be put into a df for debugging
             hall_data_flat = np.copy(hall_data).reshape((ctf[4]*ctf[5],7))
             
+            # Column units follow the film_thickness sentinel: for a 2D sheet (film_thickness = 1) the Hall data is R_xy in ohm and n is in cm^-2
+            if film_thickness == 1:
+                xy, xy_unit, n_unit = 'R_xy', 'ohm', 'cm^-2'
+            else:
+                xy, xy_unit, n_unit = 'rho_xy', 'ohm.m', 'cm^-3'
+
             # Convert the numpy array to a pandas dataframe for the Hall resistivity
-            hall_data_df = pd.DataFrame(hall_data_flat, columns=['Temp (K)', 'Field (T)', 'rho_xy_A(ohm.m)', 'R_squared(I)_A', 'rho_xy_B(ohm.m)','R_squared(I)_B', 'rho_xy_average(ohm.m)'])
+            hall_data_df = pd.DataFrame(hall_data_flat, columns=['Temp (K)', 'Field (T)', f'{xy}_A({xy_unit})', 'R_squared(I)_A', f'{xy}_B({xy_unit})','R_squared(I)_B', f'{xy}_average({xy_unit})'])
             
             # Convert the numpy array to a pandas dataframe for the Hall coefficeint
-            hall_coefficient_df = pd.DataFrame(hall_coefficient, columns=['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average','R^2(H)_average', 'Charge Carrier Density (cm^-2)', 'Charge Carrier Density Error (cm^-2)', 'Mobility (cm^2/Vs)', 'Mobility Error (cm^2/Vs)', 'n_fitted (cm^-3)', 'Mobility_fitted (cm^2/Vs)' ])
+            hall_coefficient_df = pd.DataFrame(hall_coefficient, columns=['Temp (K)', 'Hallco_A', 'R^2(H)_A', 'Hallco_B','R^2(H)_B', 'Hallco_average','R^2(H)_average', f'Charge Carrier Density ({n_unit})', f'Charge Carrier Density Error ({n_unit})', 'Mobility (cm^2/Vs)', 'Mobility Error (cm^2/Vs)', f'n_fitted ({n_unit})', 'Mobility_fitted (cm^2/Vs)' ])
             
             # Store the data in the PPMSData object
             ppms.hall_data = hall_data
